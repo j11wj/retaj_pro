@@ -6,7 +6,6 @@ import 'package:farah_sys_final/core/constants/app_strings.dart';
 import 'package:farah_sys_final/core/widgets/custom_button.dart';
 import 'package:farah_sys_final/core/widgets/custom_text_field.dart';
 import 'package:farah_sys_final/core/widgets/gender_selector.dart';
-import 'package:farah_sys_final/core/routes/app_routes.dart';
 import 'package:farah_sys_final/controllers/auth_controller.dart';
 
 class AddPatientScreen extends StatefulWidget {
@@ -184,26 +183,13 @@ class _AddPatientScreenState extends State<AddPatientScreen> {
                                     return;
                                   }
 
-                                  // Request OTP first
+                                  // حفظ مباشر في Firebase
                                   await _authController.registerPatient(
                                     name: _nameController.text.trim(),
                                     phoneNumber: _phoneController.text.trim(),
                                     gender: selectedGender!,
                                     age: age,
                                     city: selectedCity!,
-                                  );
-
-                                  // Navigate to OTP verification
-                                  Get.toNamed(
-                                    AppRoutes.otpVerification,
-                                    arguments: {
-                                      'phoneNumber': _phoneController.text.trim(),
-                                      'name': _nameController.text.trim(),
-                                      'gender': selectedGender,
-                                      'age': age,
-                                      'city': selectedCity,
-                                      'isRegistration': true,
-                                    },
                                   );
                                 },
                           width: double.infinity,

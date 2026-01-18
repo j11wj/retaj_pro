@@ -3,10 +3,8 @@ import 'package:dio/dio.dart'
     as dio
     show Response, FormData, MultipartFile, Options;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:get/get.dart';
 import 'package:farah_sys_final/core/network/api_constants.dart';
 import 'package:farah_sys_final/core/network/api_exception.dart';
-import 'package:farah_sys_final/core/routes/app_routes.dart';
 
 class ApiService {
   static final ApiService _instance = ApiService._internal();

@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "655374288545",
+    "project_id": "tyui-9673f",
+    "storage_bucket": "tyui-9673f.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:655374288545:android:6e841e183e1b91505112e0",
+        "android_client_info": {
+          "package_name": "com.example.farah_sys_final"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAI-Inlz2-fKNHDetR-D3ygI1FPyqTw0hk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -1,28 +1,24 @@
 import 'package:get/get.dart';
 import 'package:farah_sys_final/models/user_model.dart';
+import 'package:farah_sys_final/models/patient_model.dart';
 import 'package:farah_sys_final/core/routes/app_routes.dart';
 import 'package:farah_sys_final/services/auth_service.dart';
+import 'package:farah_sys_final/services/firebase_service.dart';
 import 'package:farah_sys_final/core/network/api_exception.dart';
 import 'package:farah_sys_final/controllers/clinic_controller.dart';
 
 class AuthController extends GetxController {
   final _authService = AuthService();
+  final _firebaseService = FirebaseService();
   final Rx<UserModel?> currentUser = Rx<UserModel?>(null);
   final RxBool isLoading = false.obs;
   final RxString otpCode = ''.obs;
 
-  // وضع العرض فقط (بدون Backend)
-  static const bool demoMode = true;
-
-  @override
-  void onInit() {
-    super.onInit();
-    // تعطيل التحقق من تسجيل الدخول في وضع العرض
-    // checkLoggedInUser();
-  }
+  // استخدام Firebase بدلاً من demo mode
+  static const bool useFirebase = true;
 
   Future<void> checkLoggedInUser() async {
-    if (demoMode) return;
+    if (useFirebase) return; // Firebase لا يحتاج للتحقق المسبق
     try {
       final isLoggedIn = await _authService.isLoggedIn();
       if (isLoggedIn) {
@@ -42,16 +38,8 @@ class AuthController extends GetxController {
     }
   }
 
-  // طلب إرسال OTP
+  // طلب إرسال OTP (للاستخدام المستقبلي إذا لزم الأمر)
   Future<void> requestOtp(String phoneNumber) async {
-    if (demoMode) {
-      // في وضع العرض، فقط ننتظر قليلاً ثم ننتقل
-      isLoading.value = true;
-      await Future.delayed(const Duration(seconds: 1));
-      isLoading.value = false;
-      Get.snackbar('نجح', 'تم إرسال رمز التحقق (وضع العرض)');
-      return;
-    }
     try {
       isLoading.value = true;
       await _authService.requestOtp(phoneNumber);
@@ -65,7 +53,7 @@ class AuthController extends GetxController {
     }
   }
 
-  // التحقق من OTP وتسجيل الدخول
+  // التحقق من OTP وتسجيل الدخول (للاستخدام المستقبلي)
   Future<void> verifyOtpAndLogin({
     required String phoneNumber,
     required String code,
@@ -74,27 +62,6 @@ class AuthController extends GetxController {
     int? age,
     String? city,
   }) async {
-    if (demoMode) {
-      // في وضع العرض، ننشئ مستخدم تجريبي
-      isLoading.value = true;
-      await Future.delayed(const Duration(seconds: 1));
-      
-      currentUser.value = UserModel(
-        id: 'demo_patient_1',
-        name: name ?? 'مريض تجريبي',
-        phoneNumber: phoneNumber,
-        userType: 'patient',
-        gender: gender,
-        age: age,
-        city: city,
-      );
-      
-      isLoading.value = false;
-      // توجيه المريض إلى اختيار العيادة
-      Get.offAllNamed(AppRoutes.clinicSelection);
-      Get.snackbar('نجح', 'تم تسجيل الدخول بنجاح');
-      return;
-    }
     try {
       isLoading.value = true;
       final user = await _authService.verifyOtp(
@@ -119,9 +86,39 @@ class AuthController extends GetxController {
     }
   }
 
-  // تسجيل دخول المريض (مع OTP)
+  // تسجيل دخول المريض (بدون OTP - فقط رقم الهاتف)
   Future<void> loginPatient(String phoneNumber) async {
-    await requestOtp(phoneNumber);
+    try {
+      isLoading.value = true;
+      
+      // البحث عن المريض في Firebase
+      final patient = await _firebaseService.getPatientByPhone(phoneNumber);
+      
+      if (patient == null) {
+        isLoading.value = false;
+        Get.snackbar('خطأ', 'لا يوجد حساب بهذا الرقم');
+        return;
+      }
+      
+      // إنشاء UserModel من PatientModel
+      currentUser.value = UserModel(
+        id: patient.id,
+        name: patient.name,
+        phoneNumber: patient.phoneNumber,
+        userType: 'patient',
+        gender: patient.gender,
+        age: patient.age,
+        city: patient.city,
+      );
+      
+      isLoading.value = false;
+      // توجيه المريض إلى اختيار العيادة
+      Get.offAllNamed(AppRoutes.clinicSelection);
+      Get.snackbar('نجح', 'تم تسجيل الدخول بنجاح');
+    } catch (e) {
+      isLoading.value = false;
+      Get.snackbar('خطأ', 'فشل تسجيل الدخول: ${e.toString()}');
+    }
   }
 
   // تسجيل دخول الطبيب (doctorId/doctorCode)
@@ -129,90 +126,42 @@ class AuthController extends GetxController {
     required String doctorId,
     required String doctorCode,
   }) async {
-    if (demoMode) {
-      // في وضع العرض، نتحقق من الرمز ونربط الطبيب بالعيادة
+    try {
       isLoading.value = true;
-      await Future.delayed(const Duration(seconds: 1));
       
-      // بيانات الأطباء التجريبية مع معرفاتهم ورموزهم
-      final doctors = {
-        'DR001': {'code': '1234', 'name': 'د. سجاد الساعاتي', 'clinicId': 'clinic_1'},
-        'DR002': {'code': '5678', 'name': 'د. أحمد محمد', 'clinicId': 'clinic_2'},
-        'DR003': {'code': '9012', 'name': 'د. فاطمة علي', 'clinicId': 'clinic_3'},
-        'DR004': {'code': '3456', 'name': 'د. محمود حسن', 'clinicId': 'clinic_4'},
-        'DR005': {'code': '7890', 'name': 'د. ليلى أحمد', 'clinicId': 'clinic_5'},
-        'DR006': {'code': '2468', 'name': 'د. سارة خالد', 'clinicId': 'clinic_6'},
-        'DR007': {'code': '1357', 'name': 'د. عمر يوسف', 'clinicId': 'clinic_7'},
-        'DR008': {'code': '9753', 'name': 'د. خالد إبراهيم', 'clinicId': 'clinic_8'},
-        'DR009': {'code': '8642', 'name': 'د. نادر سالم', 'clinicId': 'clinic_9'},
-        'DR010': {'code': '7410', 'name': 'د. ريم عبدالله', 'clinicId': 'clinic_10'},
-        'DR011': {'code': '3691', 'name': 'د. مها زيد', 'clinicId': 'clinic_11'},
-        'DR012': {'code': '2580', 'name': 'د. وائل ناصر', 'clinicId': 'clinic_12'},
-      };
+      // البحث عن الطبيب في Firebase
+      final doctor = await _firebaseService.getDoctorByIdAndCode(
+        doctorId.toUpperCase(),
+        doctorCode,
+      );
       
-      final doctorData = doctors[doctorId.toUpperCase()];
-      
-      if (doctorData == null || doctorData['code'] != doctorCode) {
+      if (doctor == null) {
         isLoading.value = false;
         Get.snackbar('خطأ', 'المعرف أو الرمز غير صحيح');
         return;
       }
       
-      // ربط العيادة بالطبيب
-      final clinicController = Get.find<ClinicController>();
-      final clinic = clinicController.getClinicById(doctorData['clinicId']!);
-      if (clinic != null) {
-        clinicController.selectClinic(clinic);
-      }
-      
-      currentUser.value = UserModel(
-        id: 'doctor_${doctorId.toLowerCase()}',
-        name: doctorData['name']!,
-        phoneNumber: '07901234567',
-        userType: 'doctor',
-        gender: 'male',
-        age: 35,
-        city: 'بغداد',
-        doctorId: doctorId.toUpperCase(),
-        doctorCode: doctorCode,
-        clinicId: doctorData['clinicId'],
-      );
-      
-      isLoading.value = false;
-      Get.offAllNamed(AppRoutes.doctorPatientsList);
-      Get.snackbar('نجح', 'تم تسجيل الدخول بنجاح');
-      return;
-    }
-    try {
-      isLoading.value = true;
-      final user = await _authService.staffLogin(
-        username: doctorId,
-        password: doctorCode,
-      );
-      
-      currentUser.value = user;
+      currentUser.value = doctor;
       
       // ربط العيادة بالطبيب إذا كان clinicId موجود
-      if (user.clinicId != null) {
+      if (doctor.clinicId != null) {
         final clinicController = Get.find<ClinicController>();
-        final clinic = clinicController.getClinicById(user.clinicId!);
+        final clinic = await clinicController.getClinicById(doctor.clinicId!);
         if (clinic != null) {
           clinicController.selectClinic(clinic);
         }
       }
       
+      isLoading.value = false;
       Get.offAllNamed(AppRoutes.doctorPatientsList);
       Get.snackbar('نجح', 'تم تسجيل الدخول بنجاح');
-    } on ApiException catch (e) {
-      Get.snackbar('خطأ', e.message);
     } catch (e) {
-      Get.snackbar('خطأ', 'فشل تسجيل الدخول');
-    } finally {
       isLoading.value = false;
+      Get.snackbar('خطأ', 'فشل تسجيل الدخول: ${e.toString()}');
     }
   }
 
-  // تسجيل مريض جديد (مع OTP)
+  // تسجيل مريض جديد (حفظ مباشر في Firebase)
   Future<void> registerPatient({
     required String name,
     required String phoneNumber,
@@ -222,27 +171,92 @@ class AuthController extends GetxController {
   }) async {
     try {
       isLoading.value = true;
-      // أولاً طلب OTP
-      await _authService.requestOtp(phoneNumber);
-      Get.snackbar('نجح', 'تم إرسال رمز التحقق. يرجى إدخال الرمز لإكمال التسجيل');
-    } on ApiException catch (e) {
-      Get.snackbar('خطأ', e.message);
-    } catch (e) {
-      Get.snackbar('خطأ', 'حدث خطأ أثناء التسجيل');
-    } finally {
+      
+      // التحقق من وجود حساب بنفس الرقم
+      final existingPatient = await _firebaseService.getPatientByPhone(phoneNumber);
+      if (existingPatient != null) {
+        isLoading.value = false;
+        Get.snackbar('خطأ', 'يوجد حساب بهذا الرقم بالفعل');
+        return;
+      }
+      
+      // إنشاء مريض جديد
+      final patient = PatientModel(
+        id: 'patient_${DateTime.now().millisecondsSinceEpoch}',
+        name: name,
+        phoneNumber: phoneNumber,
+        gender: gender,
+        age: age,
+        city: city,
+      );
+      
+      // حفظ في Firebase
+      await _firebaseService.createPatient(patient);
+      
+      // تسجيل الدخول تلقائياً
+      currentUser.value = UserModel(
+        id: patient.id,
+        name: patient.name,
+        phoneNumber: patient.phoneNumber,
+        userType: 'patient',
+        gender: patient.gender,
+        age: patient.age,
+        city: patient.city,
+      );
+      
       isLoading.value = false;
+      Get.offAllNamed(AppRoutes.clinicSelection);
+      Get.snackbar('نجح', 'تم إنشاء الحساب وتسجيل الدخول بنجاح');
+    } catch (e) {
+      isLoading.value = false;
+      Get.snackbar('خطأ', 'حدث خطأ أثناء التسجيل: ${e.toString()}');
+    }
+  }
+  
+  // إنشاء حساب طبيب جديد
+  Future<void> registerDoctor({
+    required String doctorId,
+    required String doctorCode,
+    required String name,
+    required String phoneNumber,
+    required String clinicId,
+  }) async {
+    try {
+      isLoading.value = true;
+      
+      // التحقق من وجود طبيب بنفس المعرف
+      final existingDoctor = await _firebaseService.getDoctorByIdAndCode(doctorId, '');
+      if (existingDoctor != null) {
+        isLoading.value = false;
+        Get.snackbar('خطأ', 'يوجد طبيب بهذا المعرف بالفعل');
+        return;
+      }
+      
+      // إنشاء طبيب جديد
+      final doctor = UserModel(
+        id: doctorId.toUpperCase(),
+        name: name,
+        phoneNumber: phoneNumber,
+        userType: 'doctor',
+        doctorId: doctorId.toUpperCase(),
+        doctorCode: doctorCode,
+        clinicId: clinicId,
+      );
+      
+      // حفظ في Firebase
+      await _firebaseService.createDoctor(doctor);
+      
+      isLoading.value = false;
+      Get.snackbar('نجح', 'تم إنشاء حساب الطبيب بنجاح');
+    } catch (e) {
+      isLoading.value = false;
+      Get.snackbar('خطأ', 'حدث خطأ أثناء التسجيل: ${e.toString()}');
     }
   }
 
   // تسجيل الخروج
   Future<void> logout() async {
-    if (demoMode) {
-      currentUser.value = null;
-      Get.offAllNamed(AppRoutes.userSelection);
-      return;
-    }
     try {
-      await _authService.logout();
       currentUser.value = null;
       Get.offAllNamed(AppRoutes.userSelection);
     } catch (e) {

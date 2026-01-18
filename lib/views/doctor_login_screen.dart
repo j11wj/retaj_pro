@@ -5,6 +5,7 @@ import 'package:farah_sys_final/core/constants/app_colors.dart';
 import 'package:farah_sys_final/core/constants/app_strings.dart';
 import 'package:farah_sys_final/core/widgets/custom_button.dart';
 import 'package:farah_sys_final/core/widgets/custom_text_field.dart';
+import 'package:farah_sys_final/core/routes/app_routes.dart';
 import 'package:farah_sys_final/controllers/auth_controller.dart';
 
 class DoctorLoginScreen extends StatefulWidget {
@@ -124,6 +125,33 @@ class _DoctorLoginScreenState extends State<DoctorLoginScreen> {
                     width: double.infinity,
                     isLoading: _authController.isLoading.value,
                   )),
+              SizedBox(height: 24.h),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    'ليس لديك حساب؟',
+                    style: TextStyle(
+                      fontSize: 14.sp,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                  SizedBox(width: 8.w),
+                  GestureDetector(
+                    onTap: () {
+                      Get.toNamed(AppRoutes.addDoctor);
+                    },
+                    child: Text(
+                      'إنشاء حساب طبيب',
+                      style: TextStyle(
+                        fontSize: 14.sp,
+                        color: AppColors.primary,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ],
           ),
         ),

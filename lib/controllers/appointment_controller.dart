@@ -3,7 +3,6 @@ import 'package:farah_sys_final/models/appointment_model.dart';
 import 'package:farah_sys_final/services/patient_service.dart';
 import 'package:farah_sys_final/services/doctor_service.dart';
 import 'package:farah_sys_final/core/network/api_exception.dart';
-import 'package:farah_sys_final/controllers/auth_controller.dart';
 
 class AppointmentController extends GetxController {
   final _patientService = PatientService();
@@ -14,58 +13,9 @@ class AppointmentController extends GetxController {
   final RxList<AppointmentModel> secondaryAppointments = <AppointmentModel>[].obs;
   final RxBool isLoading = false.obs;
 
-  @override
-  void onInit() {
-    super.onInit();
-  }
 
   // جلب مواعيد المريض
   Future<void> loadPatientAppointments() async {
-    if (AuthController.demoMode) {
-      // بيانات تجريبية
-      isLoading.value = true;
-      await Future.delayed(const Duration(milliseconds: 500));
-      
-      final now = DateTime.now();
-      appointments.value = [
-        AppointmentModel(
-          id: '1',
-          patientId: 'demo_patient_1',
-          doctorId: 'demo_doctor_1',
-          patientName: 'مريض تجريبي',
-          doctorName: 'د. سجاد الساعاتي',
-          date: now.add(const Duration(days: 3)),
-          time: '10:00 صباحاً',
-          status: 'scheduled',
-        ),
-        AppointmentModel(
-          id: '2',
-          patientId: 'demo_patient_1',
-          doctorId: 'demo_doctor_1',
-          patientName: 'مريض تجريبي',
-          doctorName: 'د. سجاد الساعاتي',
-          date: now.subtract(const Duration(days: 5)),
-          time: '2:00 مساءً',
-          status: 'completed',
-        ),
-        AppointmentModel(
-          id: '3',
-          patientId: 'demo_patient_1',
-          doctorId: 'demo_doctor_1',
-          patientName: 'مريض تجريبي',
-          doctorName: 'د. سجاد الساعاتي',
-          date: now.add(const Duration(days: 7)),
-          time: '11:30 صباحاً',
-          status: 'scheduled',
-        ),
-      ];
-      
-      primaryAppointments.value = appointments;
-      secondaryAppointments.value = [];
-      
-      isLoading.value = false;
-      return;
-    }
     try {
       isLoading.value = true;
       final result = await _patientService.getMyAppointments();

@@ -30,9 +30,16 @@ import 'package:farah_sys_final/controllers/appointment_controller.dart';
 import 'package:farah_sys_final/controllers/chat_controller.dart';
 import 'package:farah_sys_final/controllers/clinic_controller.dart';
 import 'package:farah_sys_final/views/clinic_selection_screen.dart';
+import 'package:farah_sys_final/views/add_doctor_screen.dart';
+import 'package:farah_sys_final/services/firebase_service.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
 
   await Hive.initFlutter();
 
@@ -56,6 +63,17 @@ void main() async {
   Get.put(AppointmentController());
   Get.put(ChatController());
   final clinicController = Get.put(ClinicController());
+  final firebaseService = FirebaseService();
+  
+  // إضافة بيانات العيادات التجريبية في Firebase إذا لم تكن موجودة
+  try {
+    final clinics = await firebaseService.getAllClinics();
+    if (clinics.isEmpty) {
+      await firebaseService.seedClinics();
+    }
+  } catch (e) {
+    // تجاهل الأخطاء في التهيئة
+  }
   
   // تهيئة العيادات مباشرة بعد إنشاء Controller
   clinicController.initializeClinics();
@@ -154,6 +172,10 @@ class MyApp extends StatelessWidget {
                   patientName: args?['patientName'] ?? 'مريض',
                 );
               },
+            ),
+            GetPage(
+              name: AppRoutes.addDoctor,
+              page: () => const AddDoctorScreen(),
             ),
           ],
           builder: (context, widget) {

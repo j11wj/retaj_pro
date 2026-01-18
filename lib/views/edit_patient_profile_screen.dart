@@ -252,48 +252,54 @@ class _EditPatientProfileScreenState extends State<EditPatientProfileScreen> {
                               return;
                             }
 
-                            // في وضع العرض، نحدث البيانات محلياً فقط
-                            if (AuthController.demoMode) {
+                            // تحديث البيانات في Firebase
+                            final profile = _patientController.myProfile.value;
+                            if (profile != null) {
+                              // تحويل الجنس من 'ذكر'/'أنثى' إلى 'male'/'female'
+                              String? genderValue;
+                              if (selectedGender == AppStrings.male) {
+                                genderValue = 'male';
+                              } else if (selectedGender == AppStrings.female) {
+                                genderValue = 'female';
+                              } else {
+                                genderValue = selectedGender;
+                              }
+                              
+                              // تحديث في Firebase
+                              await _patientController.updatePatient(
+                                profile.id,
+                                {
+                                  'name': _nameController.text,
+                                  'gender': genderValue ?? profile.gender,
+                                  'age': int.tryParse(_ageController.text) ?? profile.age,
+                                  'city': selectedCity ?? profile.city,
+                                },
+                              );
+                              
+                              // تحديث البيانات المحلية
+                              _patientController.myProfile.value = PatientModel(
+                                id: profile.id,
+                                name: _nameController.text,
+                                phoneNumber: profile.phoneNumber,
+                                gender: genderValue ?? profile.gender,
+                                age: int.tryParse(_ageController.text) ?? profile.age,
+                                city: selectedCity ?? profile.city,
+                                imageUrl: profile.imageUrl,
+                                doctorId: profile.doctorId,
+                                treatmentHistory: profile.treatmentHistory,
+                              );
+                              
+                              // تحديث currentUser أيضاً
                               final user = _authController.currentUser.value;
                               if (user != null) {
-                                // تحويل الجنس من 'ذكر'/'أنثى' إلى 'male'/'female'
-                                String? genderValue;
-                                if (selectedGender == AppStrings.male) {
-                                  genderValue = 'male';
-                                } else if (selectedGender == AppStrings.female) {
-                                  genderValue = 'female';
-                                } else {
-                                  genderValue = selectedGender;
-                                }
-                                
                                 _authController.currentUser.value = user.copyWith(
                                   name: _nameController.text,
                                   age: int.tryParse(_ageController.text),
                                   gender: genderValue,
                                   city: selectedCity,
                                 );
-                                
-                                // تحديث ملف المريض أيضاً
-                                final profile = _patientController.myProfile.value;
-                                if (profile != null) {
-                                  _patientController.myProfile.value = PatientModel(
-                                    id: profile.id,
-                                    name: _nameController.text,
-                                    phoneNumber: profile.phoneNumber,
-                                    gender: genderValue ?? profile.gender,
-                                    age: int.tryParse(_ageController.text) ?? profile.age,
-                                    city: selectedCity ?? profile.city,
-                                    imageUrl: profile.imageUrl,
-                                    doctorId: profile.doctorId,
-                                    treatmentHistory: profile.treatmentHistory,
-                                  );
-                                }
-                                
-                                Get.snackbar('نجح', 'تم حفظ التغييرات (وضع العرض)');
-                                Get.back();
                               }
-                            } else {
-                              // TODO: Update via API
+                              
                               Get.snackbar('نجح', 'تم حفظ التغييرات');
                               Get.back();
                             }

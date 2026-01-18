@@ -113,17 +113,9 @@ class _PatientLoginScreenState extends State<PatientLoginScreen> {
                               return;
                             }
 
-                            await _authController.requestOtp(
+                            // تسجيل الدخول مباشرة بدون OTP
+                            await _authController.loginPatient(
                               _phoneController.text.trim(),
-                            );
-
-                            // Navigate to OTP verification
-                            Get.toNamed(
-                              AppRoutes.otpVerification,
-                              arguments: {
-                                'phoneNumber': _phoneController.text.trim(),
-                                'isRegistration': false,
-                              },
                             );
                           },
                     width: double.infinity,

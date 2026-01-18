@@ -17,4 +17,5 @@ class AppRoutes {
   static const String qrCode = '/qr-code';
   static const String doctorProfile = '/doctor-profile';
   static const String medicalRecords = '/medical-records';
+  static const String addDoctor = '/add-doctor';
 }

@@ -1,88 +1,26 @@
 import 'package:get/get.dart';
 import 'package:farah_sys_final/models/patient_model.dart';
-import 'package:farah_sys_final/services/patient_service.dart';
-import 'package:farah_sys_final/services/doctor_service.dart';
-import 'package:farah_sys_final/core/network/api_exception.dart';
+import 'package:farah_sys_final/services/firebase_service.dart';
 import 'package:farah_sys_final/controllers/auth_controller.dart';
 
 class PatientController extends GetxController {
-  final _patientService = PatientService();
-  final _doctorService = DoctorService();
+  final _firebaseService = FirebaseService();
   
   final RxList<PatientModel> patients = <PatientModel>[].obs;
   final RxBool isLoading = false.obs;
   final Rx<PatientModel?> selectedPatient = Rx<PatientModel?>(null);
   final Rx<PatientModel?> myProfile = Rx<PatientModel?>(null);
 
-  @override
-  void onInit() {
-    super.onInit();
-  }
 
   // جلب قائمة المرضى (للطبيب)
   Future<void> loadPatients({int skip = 0, int limit = 50}) async {
-    if (AuthController.demoMode) {
-      // بيانات تجريبية
-      isLoading.value = true;
-      await Future.delayed(const Duration(milliseconds: 500));
-      
-      patients.value = [
-        PatientModel(
-          id: '1',
-          name: 'أحمد محمد',
-          phoneNumber: '07901234572',
-          gender: 'male',
-          age: 30,
-          city: 'بغداد',
-        ),
-        PatientModel(
-          id: '2',
-          name: 'فاطمة علي',
-          phoneNumber: '07901234573',
-          gender: 'female',
-          age: 25,
-          city: 'البصرة',
-        ),
-        PatientModel(
-          id: '3',
-          name: 'حسين عبدالله',
-          phoneNumber: '07901234574',
-          gender: 'male',
-          age: 35,
-          city: 'الموصل',
-        ),
-        PatientModel(
-          id: '4',
-          name: 'زينب أحمد',
-          phoneNumber: '07901234575',
-          gender: 'female',
-          age: 28,
-          city: 'أربيل',
-        ),
-        PatientModel(
-          id: '5',
-          name: 'محمد كريم',
-          phoneNumber: '07901234576',
-          gender: 'male',
-          age: 40,
-          city: 'كربلاء',
-        ),
-      ];
-      
-      isLoading.value = false;
-      return;
-    }
     try {
       isLoading.value = true;
-      final patientsList = await _doctorService.getMyPatients(
-        skip: skip,
-        limit: limit,
-      );
+      // جلب جميع المرضى من Firebase
+      final patientsList = await _firebaseService.getAllPatients();
       patients.value = patientsList;
-    } on ApiException catch (e) {
-      Get.snackbar('خطأ', e.message);
     } catch (e) {
-      Get.snackbar('خطأ', 'حدث خطأ أثناء تحميل المرضى');
+      Get.snackbar('خطأ', 'حدث خطأ أثناء تحميل المرضى: ${e.toString()}');
     } finally {
       isLoading.value = false;
     }
@@ -90,29 +28,18 @@ class PatientController extends GetxController {
 
   // جلب بيانات المريض الحالي (للمريض)
   Future<void> loadMyProfile() async {
-    if (AuthController.demoMode) {
-      // بيانات تجريبية
-      isLoading.value = true;
-      await Future.delayed(const Duration(milliseconds: 500));
-      
-      myProfile.value = PatientModel(
-        id: 'demo_patient_1',
-        name: 'مريض تجريبي',
-        phoneNumber: '07901234572',
-        gender: 'male',
-        age: 30,
-        city: 'بغداد',
-      );
-      
-      isLoading.value = false;
-      return;
-    }
     try {
       isLoading.value = true;
-      final profile = await _patientService.getMyProfile();
-      myProfile.value = profile;
-    } on ApiException catch (e) {
-      Get.snackbar('خطأ', e.message);
+      final currentUser = AuthController().currentUser.value;
+      
+      if (currentUser == null || currentUser.userType != 'patient') {
+        isLoading.value = false;
+        return;
+      }
+      
+      // جلب بيانات المريض من Firebase
+      final patient = await _firebaseService.getPatientByPhone(currentUser.phoneNumber);
+      myProfile.value = patient;
     } catch (e) {
       Get.snackbar('خطأ', 'حدث خطأ أثناء تحميل البيانات');
     } finally {
@@ -127,22 +54,34 @@ class PatientController extends GetxController {
   }) async {
     try {
       isLoading.value = true;
-      final updatedPatient = await _doctorService.setTreatmentType(
-        patientId: patientId,
-        treatmentType: treatmentType,
-      );
+      
+      // تحديث في Firebase
+      final patient = patients.firstWhere((p) => p.id == patientId);
+      final updatedHistory = [...(patient.treatmentHistory ?? []), treatmentType];
+      
+      await _firebaseService.updatePatient(patientId, {
+        'treatmentHistory': updatedHistory,
+      });
       
       // تحديث القائمة
       final index = patients.indexWhere((p) => p.id == patientId);
       if (index != -1) {
-        patients[index] = updatedPatient;
+        patients[index] = PatientModel(
+          id: patient.id,
+          name: patient.name,
+          phoneNumber: patient.phoneNumber,
+          gender: patient.gender,
+          age: patient.age,
+          city: patient.city,
+          imageUrl: patient.imageUrl,
+          doctorId: patient.doctorId,
+          treatmentHistory: updatedHistory,
+        );
       }
       
       Get.snackbar('نجح', 'تم تحديث نوع العلاج');
-    } on ApiException catch (e) {
-      Get.snackbar('خطأ', e.message);
     } catch (e) {
-      Get.snackbar('خطأ', 'حدث خطأ أثناء تحديث نوع العلاج');
+      Get.snackbar('خطأ', 'حدث خطأ أثناء تحديث نوع العلاج: ${e.toString()}');
     } finally {
       isLoading.value = false;
     }
@@ -167,5 +106,51 @@ class PatientController extends GetxController {
 
   void selectPatient(PatientModel? patient) {
     selectedPatient.value = patient;
+  }
+
+  // تحديث بيانات المريض
+  Future<void> updatePatient(String patientId, Map<String, dynamic> data) async {
+    try {
+      isLoading.value = true;
+      await _firebaseService.updatePatient(patientId, data);
+      
+      // تحديث البيانات المحلية
+      final index = patients.indexWhere((p) => p.id == patientId);
+      if (index != -1) {
+        final patient = patients[index];
+        patients[index] = PatientModel(
+          id: patient.id,
+          name: data['name'] ?? patient.name,
+          phoneNumber: patient.phoneNumber,
+          gender: data['gender'] ?? patient.gender,
+          age: data['age'] ?? patient.age,
+          city: data['city'] ?? patient.city,
+          imageUrl: patient.imageUrl,
+          doctorId: patient.doctorId,
+          treatmentHistory: patient.treatmentHistory,
+        );
+      }
+      
+      // تحديث myProfile إذا كان نفس المريض
+      if (myProfile.value?.id == patientId) {
+        final profile = myProfile.value!;
+        myProfile.value = PatientModel(
+          id: profile.id,
+          name: data['name'] ?? profile.name,
+          phoneNumber: profile.phoneNumber,
+          gender: data['gender'] ?? profile.gender,
+          age: data['age'] ?? profile.age,
+          city: data['city'] ?? profile.city,
+          imageUrl: profile.imageUrl,
+          doctorId: profile.doctorId,
+          treatmentHistory: profile.treatmentHistory,
+        );
+      }
+    } catch (e) {
+      Get.snackbar('خطأ', 'حدث خطأ أثناء تحديث البيانات: ${e.toString()}');
+      rethrow;
+    } finally {
+      isLoading.value = false;
+    }
   }
 }
