@@ -5,6 +5,8 @@ import 'package:farah_sys_final/core/constants/app_colors.dart';
 import 'package:farah_sys_final/core/constants/app_strings.dart';
 import 'package:farah_sys_final/controllers/chat_controller.dart';
 import 'package:farah_sys_final/controllers/auth_controller.dart';
+import 'package:farah_sys_final/services/firebase_service.dart';
+import 'package:farah_sys_final/models/user_model.dart';
 import 'package:farah_sys_final/core/widgets/loading_widget.dart';
 
 class ChatScreen extends StatefulWidget {
@@ -17,23 +19,137 @@ class ChatScreen extends StatefulWidget {
 class _ChatScreenState extends State<ChatScreen> {
   final ChatController _chatController = Get.find<ChatController>();
   final AuthController _authController = Get.find<AuthController>();
+  final FirebaseService _firebaseService = FirebaseService();
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
-  String? patientId;
+  String? otherUserId; // معرف المستخدم الآخر (مريض أو طبيب)
+  String? otherUserName; // اسم المستخدم الآخر
 
   @override
   void initState() {
     super.initState();
-    // Get patientId from arguments or from current user
+    // Get otherUserId from arguments (patientId or doctorId)
     final args = Get.arguments as Map<String, dynamic>?;
-    patientId = args?['patientId'];
+    otherUserId = args?['patientId'] ?? args?['doctorId'];
     
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (patientId != null) {
-        _chatController.loadMessages(patientId: patientId!);
-        _chatController.connectWebSocket(patientId!);
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (otherUserId != null && otherUserId!.isNotEmpty) {
+        print('بدء تحميل المحادثة مع: $otherUserId'); // للتشخيص
+        try {
+          await _loadOtherUserName();
+          await _chatController.loadMessages(otherUserId: otherUserId!);
+          await _chatController.subscribeToMessages(otherUserId!);
+        } catch (e) {
+          print('خطأ في تحميل المحادثة: $e'); // للتشخيص
+          Get.snackbar('خطأ', 'فشل تحميل المحادثة: ${e.toString()}');
+        }
+      } else {
+        Get.snackbar('خطأ', 'لم يتم تحديد المستخدم للدردشة');
+        Get.back();
       }
     });
+  }
+
+  Future<void> _loadOtherUserName() async {
+    if (otherUserId == null || otherUserId!.isEmpty) {
+      setState(() {
+        otherUserName = 'المحادثة';
+      });
+      return;
+    }
+    
+    try {
+      final currentUser = _authController.currentUser.value;
+      if (currentUser == null) {
+        setState(() {
+          otherUserName = 'المحادثة';
+        });
+        return;
+      }
+      
+      // إذا كان المستخدم الحالي مريضاً، المستخدم الآخر هو طبيب
+      if (currentUser.userType == 'patient') {
+        try {
+          // محاولة جلب الطبيب باستخدام doctorId
+          final doctor = await _firebaseService.getDoctorByIdAndCode(otherUserId!.toUpperCase(), '');
+          if (doctor != null) {
+            setState(() {
+              otherUserName = doctor.name;
+            });
+            return;
+          }
+        } catch (e) {
+          print('خطأ في جلب الطبيب بالمعرف: $e');
+        }
+        
+        // محاولة جلب جميع الأطباء والبحث
+        try {
+          final doctors = await _firebaseService.getAllDoctors();
+          if (doctors.isNotEmpty) {
+            UserModel? foundDoctor;
+            for (var doctor in doctors) {
+              if ((doctor.doctorId != null && doctor.doctorId!.toUpperCase() == otherUserId!.toUpperCase()) || 
+                  doctor.id == otherUserId) {
+                foundDoctor = doctor;
+                break;
+              }
+            }
+            
+            if (foundDoctor != null) {
+              setState(() {
+                otherUserName = foundDoctor!.name;
+              });
+            } else if (doctors.isNotEmpty) {
+              setState(() {
+                otherUserName = doctors.first.name;
+              });
+            } else {
+              setState(() {
+                otherUserName = 'الطبيب';
+              });
+            }
+          } else {
+            setState(() {
+              otherUserName = 'الطبيب';
+            });
+          }
+        } catch (e) {
+          print('خطأ في البحث عن الطبيب: $e');
+          setState(() {
+            otherUserName = 'الطبيب';
+          });
+        }
+      } 
+      // إذا كان المستخدم الحالي طبيباً، المستخدم الآخر هو مريض
+      else if (currentUser.userType == 'doctor') {
+        try {
+          final patient = await _firebaseService.getPatientById(otherUserId!);
+          if (patient != null) {
+            setState(() {
+              otherUserName = patient.name;
+            });
+          } else {
+            setState(() {
+              otherUserName = 'المريض';
+            });
+          }
+        } catch (e) {
+          print('خطأ في جلب بيانات المريض: $e');
+          setState(() {
+            otherUserName = 'المريض';
+          });
+        }
+      } else {
+        setState(() {
+          otherUserName = 'المحادثة';
+        });
+      }
+    } catch (e) {
+      print('خطأ في جلب اسم المستخدم الآخر: $e');
+      setState(() {
+        otherUserName = 'المحادثة';
+      });
+    }
   }
 
   @override
@@ -72,7 +188,7 @@ class _ChatScreenState extends State<ChatScreen> {
                   Expanded(
                     child: Center(
                       child: Text(
-                        'د سجاد الساعاتي',
+                        otherUserName ?? 'المحادثة',
                         style: TextStyle(
                           fontSize: 20.sp,
                           fontWeight: FontWeight.bold,
@@ -143,7 +259,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 children: [
                   GestureDetector(
                     onTap: () async {
-                      if (_messageController.text.trim().isNotEmpty && patientId != null) {
+                      if (_messageController.text.trim().isNotEmpty && otherUserId != null) {
                         await _chatController.sendMessage(_messageController.text.trim());
                         _messageController.clear();
                         // Scroll to bottom

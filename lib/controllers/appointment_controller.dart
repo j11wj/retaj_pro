@@ -1,12 +1,11 @@
 import 'package:get/get.dart';
 import 'package:farah_sys_final/models/appointment_model.dart';
-import 'package:farah_sys_final/services/patient_service.dart';
-import 'package:farah_sys_final/services/doctor_service.dart';
-import 'package:farah_sys_final/core/network/api_exception.dart';
+import 'package:farah_sys_final/services/firebase_service.dart';
+import 'package:farah_sys_final/controllers/auth_controller.dart';
+import 'package:farah_sys_final/controllers/patient_controller.dart';
 
 class AppointmentController extends GetxController {
-  final _patientService = PatientService();
-  final _doctorService = DoctorService();
+  final _firebaseService = FirebaseService();
   
   final RxList<AppointmentModel> appointments = <AppointmentModel>[].obs;
   final RxList<AppointmentModel> primaryAppointments = <AppointmentModel>[].obs;
@@ -18,19 +17,18 @@ class AppointmentController extends GetxController {
   Future<void> loadPatientAppointments() async {
     try {
       isLoading.value = true;
-      final result = await _patientService.getMyAppointments();
-      primaryAppointments.value = result['primary'] ?? [];
-      secondaryAppointments.value = result['secondary'] ?? [];
+      final authController = Get.find<AuthController>();
+      final currentUser = authController.currentUser.value;
       
-      // دمج المواعيد
-      appointments.value = [
-        ...primaryAppointments,
-        ...secondaryAppointments,
-      ];
-    } on ApiException catch (e) {
-      Get.snackbar('خطأ', e.message);
+      if (currentUser == null || currentUser.userType != 'patient') {
+        isLoading.value = false;
+        return;
+      }
+      
+      final appointmentsList = await _firebaseService.getPatientAppointments(currentUser.id);
+      appointments.value = appointmentsList;
     } catch (e) {
-      Get.snackbar('خطأ', 'حدث خطأ أثناء تحميل المواعيد');
+      Get.snackbar('خطأ', 'حدث خطأ أثناء تحميل المواعيد: ${e.toString()}');
     } finally {
       isLoading.value = false;
     }
@@ -47,19 +45,33 @@ class AppointmentController extends GetxController {
   }) async {
     try {
       isLoading.value = true;
-      final appointmentsList = await _doctorService.getMyAppointments(
-        day: day,
-        dateFrom: dateFrom,
-        dateTo: dateTo,
-        status: status,
-        skip: skip,
-        limit: limit,
-      );
-      appointments.value = appointmentsList;
-    } on ApiException catch (e) {
-      Get.snackbar('خطأ', e.message);
+      final authController = Get.find<AuthController>();
+      final currentUser = authController.currentUser.value;
+      
+      if (currentUser == null || currentUser.userType != 'doctor' || currentUser.doctorId == null) {
+        isLoading.value = false;
+        return;
+      }
+      
+      final appointmentsList = await _firebaseService.getDoctorAppointments(currentUser.doctorId!);
+      
+      // تطبيق الفلاتر إذا كانت موجودة
+      var filteredAppointments = appointmentsList;
+      if (status != null) {
+        filteredAppointments = filteredAppointments.where((apt) => apt.status == status).toList();
+      }
+      if (dateFrom != null) {
+        final fromDate = DateTime.parse(dateFrom);
+        filteredAppointments = filteredAppointments.where((apt) => apt.date.isAfter(fromDate) || apt.date.isAtSameMomentAs(fromDate)).toList();
+      }
+      if (dateTo != null) {
+        final toDate = DateTime.parse(dateTo);
+        filteredAppointments = filteredAppointments.where((apt) => apt.date.isBefore(toDate) || apt.date.isAtSameMomentAs(toDate)).toList();
+      }
+      
+      appointments.value = filteredAppointments;
     } catch (e) {
-      Get.snackbar('خطأ', 'حدث خطأ أثناء تحميل المواعيد');
+      Get.snackbar('خطأ', 'حدث خطأ أثناء تحميل المواعيد: ${e.toString()}');
     } finally {
       isLoading.value = false;
     }
@@ -75,20 +87,37 @@ class AppointmentController extends GetxController {
   }) async {
     try {
       isLoading.value = true;
-      final appointment = await _doctorService.addAppointment(
+      
+      final authController = Get.find<AuthController>();
+      final patientController = Get.find<PatientController>();
+      final currentUser = authController.currentUser.value;
+      final patient = patientController.getPatientById(patientId);
+      
+      if (currentUser == null || currentUser.userType != 'doctor' || currentUser.doctorId == null) {
+        throw Exception('الطبيب غير مسجل دخول');
+      }
+      
+      if (patient == null) {
+        throw Exception('المريض غير موجود');
+      }
+      
+      final appointment = AppointmentModel(
+        id: '',
         patientId: patientId,
-        scheduledAt: scheduledAt,
-        note: note,
-        imageBytes: imageBytes,
-        fileName: fileName,
+        patientName: patient.name,
+        doctorId: currentUser.doctorId!,
+        doctorName: currentUser.name,
+        date: scheduledAt,
+        time: '${scheduledAt.hour.toString().padLeft(2, '0')}:${scheduledAt.minute.toString().padLeft(2, '0')}',
+        status: 'scheduled',
+        notes: note,
       );
       
+      await _firebaseService.createAppointment(appointment);
       appointments.add(appointment);
       Get.snackbar('نجح', 'تم إضافة الموعد بنجاح');
-    } on ApiException catch (e) {
-      Get.snackbar('خطأ', e.message);
     } catch (e) {
-      Get.snackbar('خطأ', 'حدث خطأ أثناء إضافة الموعد');
+      Get.snackbar('خطأ', 'حدث خطأ أثناء إضافة الموعد: ${e.toString()}');
     } finally {
       isLoading.value = false;
     }

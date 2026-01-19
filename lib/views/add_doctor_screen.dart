@@ -21,7 +21,7 @@ class _AddDoctorScreenState extends State<AddDoctorScreen> {
   final TextEditingController _doctorCodeController = TextEditingController();
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _phoneController = TextEditingController();
-  String? selectedClinicId;
+  final RxString selectedClinicId = ''.obs;
 
   @override
   void initState() {
@@ -90,21 +90,25 @@ class _AddDoctorScreenState extends State<AddDoctorScreen> {
                 keyboardType: TextInputType.phone,
               ),
               SizedBox(height: 24.h),
-              Obx(() {
-                final clinics = _clinicController.clinics;
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text(
-                      'اختر العيادة',
-                      style: TextStyle(
-                        fontSize: 16.sp,
-                        fontWeight: FontWeight.w500,
-                        color: AppColors.textPrimary,
-                      ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    'اختر العيادة',
+                    style: TextStyle(
+                      fontSize: 16.sp,
+                      fontWeight: FontWeight.w500,
+                      color: AppColors.textPrimary,
                     ),
-                    SizedBox(height: 8.h),
-                    GestureDetector(
+                  ),
+                  SizedBox(height: 8.h),
+                  Obx(() {
+                    final clinics = _clinicController.clinics;
+                    final selectedClinic = selectedClinicId.value.isNotEmpty && clinics.isNotEmpty
+                        ? clinics.firstWhereOrNull((c) => c.id == selectedClinicId.value)
+                        : null;
+                    
+                    return GestureDetector(
                       onTap: () => _showClinicPicker(clinics),
                       child: Container(
                         padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 16.h),
@@ -124,12 +128,10 @@ class _AddDoctorScreenState extends State<AddDoctorScreen> {
                               color: AppColors.textSecondary,
                             ),
                             Text(
-                              selectedClinicId != null
-                                  ? clinics.firstWhere((c) => c.id == selectedClinicId).name
-                                  : 'اختر العيادة',
+                              selectedClinic?.name ?? 'اختر العيادة',
                               style: TextStyle(
                                 fontSize: 16.sp,
-                                color: selectedClinicId != null
+                                color: selectedClinic != null
                                     ? AppColors.textPrimary
                                     : AppColors.textHint,
                               ),
@@ -137,10 +139,10 @@ class _AddDoctorScreenState extends State<AddDoctorScreen> {
                           ],
                         ),
                       ),
-                    ),
-                  ],
-                );
-              }),
+                    );
+                  }),
+                ],
+              ),
               SizedBox(height: 48.h),
               Obx(() => CustomButton(
                     text: 'إضافة طبيب',
@@ -151,7 +153,7 @@ class _AddDoctorScreenState extends State<AddDoctorScreen> {
                                 _doctorCodeController.text.isEmpty ||
                                 _nameController.text.isEmpty ||
                                 _phoneController.text.isEmpty ||
-                                selectedClinicId == null) {
+                                selectedClinicId.value.isEmpty) {
                               Get.snackbar(
                                 'خطأ',
                                 'يرجى ملء جميع الحقول',
@@ -165,7 +167,7 @@ class _AddDoctorScreenState extends State<AddDoctorScreen> {
                               doctorCode: _doctorCodeController.text.trim(),
                               name: _nameController.text.trim(),
                               phoneNumber: _phoneController.text.trim(),
-                              clinicId: selectedClinicId!,
+                              clinicId: selectedClinicId.value,
                             );
 
                             Get.back();
@@ -220,11 +222,9 @@ class _AddDoctorScreenState extends State<AddDoctorScreen> {
                       color: AppColors.textSecondary,
                     ),
                   ),
-                  selected: selectedClinicId == clinic.id,
+                  selected: selectedClinicId.value == clinic.id,
                   onTap: () {
-                    setState(() {
-                      selectedClinicId = clinic.id;
-                    });
+                    selectedClinicId.value = clinic.id;
                     Navigator.pop(context);
                   },
                 );
@@ -236,4 +236,5 @@ class _AddDoctorScreenState extends State<AddDoctorScreen> {
     );
   }
 }
+
 

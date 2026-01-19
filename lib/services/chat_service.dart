@@ -1,141 +1,94 @@
-import 'dart:convert';
-import 'package:web_socket_channel/web_socket_channel.dart';
-import 'package:farah_sys_final/services/api_service.dart';
-import 'package:farah_sys_final/core/network/api_constants.dart';
-import 'package:farah_sys_final/core/network/api_exception.dart';
+import 'package:farah_sys_final/services/firebase_service.dart';
 import 'package:farah_sys_final/models/message_model.dart';
+import 'dart:async';
 
 class ChatService {
-  final _api = ApiService();
-  WebSocketChannel? _channel;
-  String? _currentPatientId;
+  final _firebaseService = FirebaseService();
+  StreamSubscription<List<MessageModel>>? _messagesSubscription;
 
-  // جلب الرسائل من API
+  /// جلب الرسائل من Firebase
   Future<List<MessageModel>> getMessages({
-    required String patientId,
+    required String userId1,
+    required String userId2,
     int limit = 50,
-    String? before,
   }) async {
     try {
-      final queryParams = <String, dynamic>{'limit': limit};
-      if (before != null) queryParams['before'] = before;
-
-      final response = await _api.get(
-        ApiConstants.chatMessages(patientId),
-        queryParameters: queryParams,
+      return await _firebaseService.getMessages(
+        userId1: userId1,
+        userId2: userId2,
+        limit: limit,
       );
-
-      if (response.statusCode == 200) {
-        final data = response.data as List;
-        return data
-            .map((json) => MessageModel.fromJson(json))
-            .toList();
-      } else {
-        throw ApiException('فشل جلب الرسائل');
-      }
     } catch (e) {
-      if (e is ApiException) {
-        rethrow;
-      }
-      throw ApiException('فشل جلب الرسائل: ${e.toString()}');
+      throw Exception('فشل جلب الرسائل: ${e.toString()}');
     }
   }
 
-  // الاتصال بـ WebSocket
-  Future<void> connectWebSocket({
-    required String patientId,
-    required Function(MessageModel) onMessage,
-    Function()? onConnected,
+  /// الاشتراك في الرسائل (للوقت الفعلي)
+  void subscribeToMessages({
+    required String userId1,
+    required String userId2,
+    required Function(List<MessageModel>) onMessages,
     Function(dynamic)? onError,
-  }) async {
+  }) {
     try {
-      // إغلاق الاتصال السابق إن وجد
-      disconnect();
-
-      final token = await _api.getToken();
-      if (token == null) {
-        throw ApiException('غير مصرح به');
-      }
+      // إلغاء الاشتراك السابق إن وجد
+      unsubscribe();
       
-      final wsUrl = '${ApiConstants.wsChat(patientId)}?token=$token';
-      
-      _channel = WebSocketChannel.connect(Uri.parse(wsUrl));
-      _currentPatientId = patientId;
-
-      _channel!.stream.listen(
-        (message) {
-          try {
-            // Parse JSON message
-            Map<String, dynamic> data = {};
-            if (message is String) {
-              if (message.startsWith('{')) {
-                data = _parseJsonString(message);
-              }
-            } else if (message is Map) {
-              data = Map<String, dynamic>.from(message);
-            }
-            
-            if (data.isNotEmpty) {
-              final messageModel = MessageModel.fromJson(data);
-              onMessage(messageModel);
-            }
-          } catch (e) {
-            if (onError != null) onError(e);
-          }
-        },
-        onError: (error) {
-          if (onError != null) onError(error);
-        },
-        onDone: () {
-          _channel = null;
-          _currentPatientId = null;
-        },
-        cancelOnError: false,
-      );
-
-      if (onConnected != null) onConnected();
+      _messagesSubscription = _firebaseService
+          .getMessagesStream(userId1: userId1, userId2: userId2)
+          .listen(
+            (messages) {
+              onMessages(messages);
+            },
+            onError: (error) {
+              if (onError != null) onError(error);
+            },
+          );
     } catch (e) {
       if (onError != null) onError(e);
-      throw ApiException('فشل الاتصال: ${e.toString()}');
+      throw Exception('فشل الاشتراك في الرسائل: ${e.toString()}');
     }
   }
 
-  // إرسال رسالة عبر WebSocket
-  void sendMessage(String content) {
-    if (_channel == null) {
-      throw ApiException('غير متصل بـ WebSocket');
-    }
-
+  /// إرسال رسالة عبر Firebase
+  Future<void> sendMessage({
+    required String senderId,
+    required String receiverId,
+    required String message,
+  }) async {
     try {
-      final message = {
-        'message': content,
-      };
-      _channel!.sink.add(message.toString().replaceAll("'", '"'));
+      await _firebaseService.sendMessage(
+        senderId: senderId,
+        receiverId: receiverId,
+        message: message,
+      );
     } catch (e) {
-      throw ApiException('فشل إرسال الرسالة: ${e.toString()}');
+      throw Exception('فشل إرسال الرسالة: ${e.toString()}');
     }
   }
 
-  // قطع الاتصال
-  void disconnect() {
-    if (_channel != null) {
-      _channel!.sink.close();
-      _channel = null;
-      _currentPatientId = null;
-    }
-  }
-
-  // Parse JSON string helper
-  Map<String, dynamic> _parseJsonString(String jsonString) {
+  /// تحديث حالة القراءة
+  Future<void> markMessagesAsRead({
+    required String userId1,
+    required String userId2,
+  }) async {
     try {
-      // Use dart:convert for proper JSON parsing
-      return json.decode(jsonString) as Map<String, dynamic>;
+      await _firebaseService.markMessagesAsRead(
+        userId1: userId1,
+        userId2: userId2,
+      );
     } catch (e) {
-      return {};
+      // لا نرمي خطأ هنا لأنها عملية ثانوية
+      print('فشل تحديث حالة القراءة: $e');
     }
   }
 
-  // التحقق من حالة الاتصال
-  bool get isConnected => _channel != null;
+  /// إلغاء الاشتراك
+  void unsubscribe() {
+    _messagesSubscription?.cancel();
+    _messagesSubscription = null;
+  }
+
+  /// التحقق من حالة الاتصال
+  bool get isConnected => _messagesSubscription != null;
 }
-

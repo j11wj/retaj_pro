@@ -30,18 +30,32 @@ class PatientController extends GetxController {
   Future<void> loadMyProfile() async {
     try {
       isLoading.value = true;
-      final currentUser = AuthController().currentUser.value;
+      final authController = Get.find<AuthController>();
+      final currentUser = authController.currentUser.value;
       
       if (currentUser == null || currentUser.userType != 'patient') {
+        print('المستخدم غير مريض أو غير مسجل دخول'); // للتشخيص
         isLoading.value = false;
         return;
       }
       
+      print('جلب بيانات المريض برقم الهاتف: ${currentUser.phoneNumber}'); // للتشخيص
+      
       // جلب بيانات المريض من Firebase
       final patient = await _firebaseService.getPatientByPhone(currentUser.phoneNumber);
-      myProfile.value = patient;
+      
+      if (patient == null) {
+        print('لم يتم العثور على بيانات المريض'); // للتشخيص
+        Get.snackbar('خطأ', 'لم يتم العثور على بيانات المريض');
+        myProfile.value = null;
+      } else {
+        print('تم جلب بيانات المريض: ${patient.name}'); // للتشخيص
+        myProfile.value = patient;
+      }
     } catch (e) {
-      Get.snackbar('خطأ', 'حدث خطأ أثناء تحميل البيانات');
+      print('خطأ في loadMyProfile: $e'); // للتشخيص
+      Get.snackbar('خطأ', 'حدث خطأ أثناء تحميل البيانات: ${e.toString()}');
+      myProfile.value = null;
     } finally {
       isLoading.value = false;
     }
@@ -57,7 +71,7 @@ class PatientController extends GetxController {
       
       // تحديث في Firebase
       final patient = patients.firstWhere((p) => p.id == patientId);
-      final updatedHistory = [...(patient.treatmentHistory ?? []), treatmentType];
+      final updatedHistory = <String>[...(patient.treatmentHistory ?? <String>[]), treatmentType];
       
       await _firebaseService.updatePatient(patientId, {
         'treatmentHistory': updatedHistory,

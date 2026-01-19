@@ -8,6 +8,8 @@ import 'package:farah_sys_final/controllers/auth_controller.dart';
 import 'package:farah_sys_final/controllers/patient_controller.dart';
 import 'package:farah_sys_final/controllers/appointment_controller.dart';
 import 'package:farah_sys_final/controllers/clinic_controller.dart';
+import 'package:farah_sys_final/services/firebase_service.dart';
+import 'package:farah_sys_final/models/user_model.dart';
 
 class PatientHomeScreen extends StatelessWidget {
   const PatientHomeScreen({super.key});
@@ -165,10 +167,111 @@ class PatientHomeScreen extends StatelessWidget {
                 child: Row(
                   children: [
                     GestureDetector(
-                      onTap: () {
-                        final profile = patientController.myProfile.value;
-                        if (profile != null) {
-                          Get.toNamed(AppRoutes.chat, arguments: {'patientId': profile.id});
+                      onTap: () async {
+                  
+                        try {
+                          // التأكد من تحميل بيانات المريض أولاً
+                          if (patientController.myProfile.value == null) {
+                            await patientController.loadMyProfile();
+                          }
+                          
+                          final profile = patientController.myProfile.value;
+                          final clinic = clinicController.selectedClinic.value;
+                          
+                          if (profile == null) {
+                            Get.snackbar('خطأ', 'لم يتم تحميل بيانات المريض. يرجى المحاولة مرة أخرى');
+                            return;
+                          }
+                          
+                          print('بيانات المريض: ${profile.name}, doctorId: ${profile.doctorId}'); // للتشخيص
+                          
+                          // البحث عن الطبيب المرتبط بالعيادة
+                          String? doctorId;
+                          
+                          // أولاً: محاولة الحصول على doctorId من بيانات المريض
+                          if (profile.doctorId != null && profile.doctorId!.isNotEmpty) {
+                            doctorId = profile.doctorId;
+                          } 
+                          // ثانياً: البحث عن الطبيب المرتبط بالعيادة المختارة
+                          else if (clinic != null) {
+                            try {
+                              print('البحث عن الطبيب المرتبط بالعيادة: ${clinic.id}'); // للتشخيص
+                              final firebaseService = FirebaseService();
+                              final doctors = await firebaseService.getAllDoctors();
+                              print('تم جلب ${doctors.length} طبيب'); // للتشخيص
+                              
+                              // البحث عن الطبيب المرتبط بالعيادة
+                              UserModel? foundDoctor;
+                              for (var doctor in doctors) {
+                                print('فحص طبيب: ${doctor.name}, clinicId: ${doctor.clinicId}, doctorId: ${doctor.doctorId}'); // للتشخيص
+                                if (doctor.clinicId == clinic.id && doctor.doctorId != null) {
+                                  foundDoctor = doctor;
+                                  break;
+                                }
+                              }
+                              
+                              if (foundDoctor != null && foundDoctor.doctorId != null) {
+                                doctorId = foundDoctor.doctorId;
+                                print('تم العثور على الطبيب من العيادة: $doctorId'); // للتشخيص
+                              } else {
+                                print('لم يتم العثور على طبيب مرتبط بالعيادة'); // للتشخيص
+                              }
+                            } catch (e) {
+                              print('خطأ في جلب الأطباء: $e'); // للتشخيص
+                              // نتابع المحاولة بطريقة أخرى
+                            }
+                          }
+                          
+                          // ثالثاً: إذا لم نجد طبيباً، نبحث بالاسم
+                          if (doctorId == null || doctorId.isEmpty) {
+                            if (clinic != null && clinic.doctorName != null) {
+                              print('البحث عن الطبيب بالاسم: ${clinic.doctorName}'); // للتشخيص
+                              try {
+                                final firebaseService = FirebaseService();
+                                final doctors = await firebaseService.getAllDoctors();
+                                for (var doctor in doctors) {
+                                  if (doctor.name == clinic.doctorName && doctor.doctorId != null) {
+                                    doctorId = doctor.doctorId;
+                                    print('تم العثور على الطبيب بالاسم: $doctorId'); // للتشخيص
+                                    break;
+                                  }
+                                }
+                              } catch (e) {
+                                print('خطأ في البحث عن الطبيب بالاسم: $e'); // للتشخيص
+                              }
+                            }
+                            
+                            // رابعاً: إذا لم نجد طبيباً، نستخدم أول طبيب متاح
+                            if (doctorId == null || doctorId.isEmpty) {
+                              try {
+                                final firebaseService = FirebaseService();
+                                final doctors = await firebaseService.getAllDoctors();
+                                if (doctors.isNotEmpty) {
+                                  final firstDoctor = doctors.firstWhere(
+                                    (doc) => doc.doctorId != null,
+                                    orElse: () => doctors.first,
+                                  );
+                                  if (firstDoctor.doctorId != null) {
+                                    doctorId = firstDoctor.doctorId;
+                                    print('استخدام أول طبيب متاح: $doctorId'); // للتشخيص
+                                  }
+                                }
+                              } catch (e) {
+                                print('خطأ في جلب الأطباء: $e'); // للتشخيص
+                              }
+                            }
+                            
+                            if (doctorId == null || doctorId.isEmpty) {
+                              Get.snackbar('خطأ', 'لم يتم العثور على طبيب. يرجى التأكد من وجود أطباء في النظام');
+                              return;
+                            }
+                          }
+                          
+                          print('فتح المحادثة مع الطبيب: $doctorId'); // للتشخيص
+                          Get.toNamed(AppRoutes.chat, arguments: {'doctorId': doctorId});
+                        } catch (e) {
+                          print('خطأ كامل في فتح المحادثة: $e');
+                          Get.snackbar('خطأ', 'فشل فتح المحادثة: ${e.toString()}');
                         }
                       },
                       child: Container(

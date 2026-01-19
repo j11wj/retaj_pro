@@ -6,19 +6,51 @@ import 'package:farah_sys_final/core/widgets/empty_state_widget.dart';
 import 'package:farah_sys_final/core/widgets/loading_widget.dart';
 import 'package:farah_sys_final/controllers/patient_controller.dart';
 import 'package:farah_sys_final/core/routes/app_routes.dart';
+import 'package:farah_sys_final/models/patient_model.dart';
+import 'package:farah_sys_final/views/barcode_scanner_screen.dart';
 
-class DoctorPatientsListScreen extends StatelessWidget {
+class DoctorPatientsListScreen extends StatefulWidget {
   const DoctorPatientsListScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    final patientController = Get.find<PatientController>();
-    
+  State<DoctorPatientsListScreen> createState() => _DoctorPatientsListScreenState();
+}
+
+class _DoctorPatientsListScreenState extends State<DoctorPatientsListScreen> {
+  final PatientController _patientController = Get.find<PatientController>();
+  final TextEditingController _searchController = TextEditingController();
+  final RxBool _isSearching = false.obs;
+  List<dynamic> _filteredPatients = [];
+
+  @override
+  void initState() {
+    super.initState();
     // Load patients on first build
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      patientController.loadPatients();
+      _patientController.loadPatients();
     });
+    _searchController.addListener(_onSearchChanged);
+  }
 
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  void _onSearchChanged() {
+    final query = _searchController.text;
+    if (query.isEmpty) {
+      _filteredPatients = [];
+      _isSearching.value = false;
+    } else {
+      _filteredPatients = _patientController.searchPatients(query);
+      _isSearching.value = true;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
       body: SafeArea(
         child: Column(
@@ -29,12 +61,13 @@ class DoctorPatientsListScreen extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   IconButton(
-                    onPressed: () {},
+                    onPressed: () => _showBarcodeScanner(),
                     icon: Icon(
-                      Icons.add_circle_outline,
+                      Icons.qr_code_scanner,
                       color: AppColors.primary,
                       size: 28.sp,
                     ),
+                    tooltip: 'مسح الباركود',
                   ),
                   Text(
                     'قائمة المرضى',
@@ -45,9 +78,16 @@ class DoctorPatientsListScreen extends StatelessWidget {
                     ),
                   ),
                   IconButton(
-                    onPressed: () {},
+                    onPressed: () {
+                      if (_isSearching.value) {
+                        _searchController.clear();
+                        _isSearching.value = false;
+                      } else {
+                        _showSearchDialog();
+                      }
+                    },
                     icon: Icon(
-                      Icons.search,
+                      _isSearching.value ? Icons.close : Icons.search,
                       color: AppColors.primary,
                       size: 28.sp,
                     ),
@@ -55,28 +95,58 @@ class DoctorPatientsListScreen extends StatelessWidget {
                 ],
               ),
             ),
+            Obx(() {
+              if (_isSearching.value && _searchController.text.isNotEmpty) {
+                return Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 24.w),
+                  child: TextField(
+                    controller: _searchController,
+                    decoration: InputDecoration(
+                      hintText: 'ابحث عن مريض...',
+                      prefixIcon: Icon(Icons.search),
+                      suffixIcon: IconButton(
+                        icon: Icon(Icons.clear),
+                        onPressed: () {
+                          _searchController.clear();
+                          _isSearching.value = false;
+                        },
+                      ),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12.r),
+                      ),
+                    ),
+                  ),
+                );
+              }
+              return SizedBox.shrink();
+            }),
+            SizedBox(height: 8.h),
             Expanded(
               child: Obx(() {
-                if (patientController.isLoading.value) {
+                if (_patientController.isLoading.value) {
                   return const LoadingWidget(message: 'جاري تحميل المرضى...');
                 }
 
-                if (patientController.patients.isEmpty) {
+                final patientsToShow = _isSearching.value && _searchController.text.isNotEmpty
+                    ? _filteredPatients
+                    : _patientController.patients;
+
+                if (patientsToShow.isEmpty) {
                   return EmptyStateWidget(
                     icon: Icons.people_outline,
-                    title: 'لا يوجد مرضى',
-                    subtitle: 'لم يتم إضافة أي مريض بعد',
+                    title: _isSearching.value ? 'لا توجد نتائج' : 'لا يوجد مرضى',
+                    subtitle: _isSearching.value ? 'لم يتم العثور على مرضى بهذا الاسم' : 'لم يتم إضافة أي مريض بعد',
                   );
                 }
 
                 return ListView.builder(
                   padding: EdgeInsets.symmetric(horizontal: 24.w),
-                  itemCount: patientController.patients.length,
+                  itemCount: patientsToShow.length,
                   itemBuilder: (context, index) {
-                    final patient = patientController.patients[index];
+                    final patient = patientsToShow[index] as PatientModel;
                     return GestureDetector(
                       onTap: () {
-                        patientController.selectPatient(patient);
+                        _patientController.selectPatient(patient);
                         Get.toNamed(
                           AppRoutes.patientDetails,
                           arguments: {'patientId': patient.id},
@@ -239,5 +309,13 @@ class DoctorPatientsListScreen extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  void _showSearchDialog() {
+    _isSearching.value = true;
+  }
+
+  void _showBarcodeScanner() {
+    Get.to(() => BarcodeScannerScreen());
   }
 }

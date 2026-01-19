@@ -1,7 +1,11 @@
+import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:farah_sys_final/models/user_model.dart';
 import 'package:farah_sys_final/models/patient_model.dart';
 import 'package:farah_sys_final/models/clinic_model.dart';
+import 'package:farah_sys_final/models/appointment_model.dart';
+import 'package:farah_sys_final/models/medical_record_model.dart';
+import 'package:farah_sys_final/models/message_model.dart';
 
 class FirebaseService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -311,6 +315,347 @@ class FirebaseService {
       await batch.commit();
     } catch (e) {
       throw Exception('فشل إضافة بيانات العيادات: $e');
+    }
+  }
+
+  // ============ Appointments ============
+
+  /// إضافة موعد جديد
+  Future<String> createAppointment(AppointmentModel appointment) async {
+    try {
+      print('إضافة موعد جديد للمريض: ${appointment.patientId}'); // للتشخيص
+      final docRef = _firestore.collection(appointmentsCollection).doc();
+      final appointmentData = {
+        'id': docRef.id,
+        'patientId': appointment.patientId,
+        'patientName': appointment.patientName,
+        'doctorId': appointment.doctorId,
+        'doctorName': appointment.doctorName,
+        'date': appointment.date.toIso8601String(),
+        'scheduled_at': appointment.date.toIso8601String(), // للحفاظ على التوافق
+        'time': appointment.time,
+        'status': appointment.status,
+        'notes': appointment.notes,
+      };
+      print('بيانات الموعد: $appointmentData'); // للتشخيص
+      await docRef.set(appointmentData);
+      print('تم حفظ الموعد بنجاح برقم: ${docRef.id}'); // للتشخيص
+      return docRef.id;
+    } catch (e) {
+      print('خطأ في createAppointment: $e'); // للتشخيص
+      throw Exception('فشل إضافة الموعد: $e');
+    }
+  }
+
+  /// جلب مواعيد مريض محدد
+  Future<List<AppointmentModel>> getPatientAppointments(String patientId) async {
+    try {
+      print('جلب مواعيد المريض: $patientId'); // للتشخيص
+      final querySnapshot = await _firestore
+          .collection(appointmentsCollection)
+          .where('patientId', isEqualTo: patientId)
+          .get();
+
+      print('تم العثور على ${querySnapshot.docs.length} موعد'); // للتشخيص
+
+      final appointments = querySnapshot.docs.map((doc) {
+        final data = doc.data();
+        data['id'] = doc.id;
+        print('معالجة موعد: ${doc.id}, patientId: ${data['patientId']}'); // للتشخيص
+        return AppointmentModel.fromJson(data);
+      }).toList();
+      
+      // ترتيب المواعيد حسب التاريخ (الأقدم أولاً)
+      appointments.sort((a, b) => a.date.compareTo(b.date));
+      
+      return appointments;
+    } catch (e) {
+      print('خطأ في getPatientAppointments: $e'); // للتشخيص
+      throw Exception('فشل جلب مواعيد المريض: $e');
+    }
+  }
+
+  /// جلب مواعيد طبيب محدد
+  Future<List<AppointmentModel>> getDoctorAppointments(String doctorId) async {
+    try {
+      print('جلب مواعيد الطبيب: $doctorId'); // للتشخيص
+      final querySnapshot = await _firestore
+          .collection(appointmentsCollection)
+          .where('doctorId', isEqualTo: doctorId)
+          .get();
+
+      print('تم العثور على ${querySnapshot.docs.length} موعد'); // للتشخيص
+
+      final appointments = querySnapshot.docs.map((doc) {
+        final data = doc.data();
+        data['id'] = doc.id;
+        print('معالجة موعد: ${doc.id}, doctorId: ${data['doctorId']}'); // للتشخيص
+        return AppointmentModel.fromJson(data);
+      }).toList();
+      
+      // ترتيب المواعيد حسب التاريخ (الأقدم أولاً)
+      appointments.sort((a, b) => a.date.compareTo(b.date));
+      
+      return appointments;
+    } catch (e) {
+      print('خطأ في getDoctorAppointments: $e'); // للتشخيص
+      throw Exception('فشل جلب مواعيد الطبيب: $e');
+    }
+  }
+
+  // ============ Medical Records ============
+
+  /// إضافة سجل طبي جديد
+  Future<String> createMedicalRecord(MedicalRecordModel record) async {
+    try {
+      print('إضافة سجل طبي جديد للمريض: ${record.patientId}'); // للتشخيص
+      final docRef = _firestore.collection(medicalRecordsCollection).doc();
+      final recordData = {
+        'id': docRef.id,
+        'patientId': record.patientId,
+        'doctorId': record.doctorId,
+        'date': record.date.toIso8601String(),
+        'created_at': record.date.toIso8601String(), // للحفاظ على التوافق
+        'treatmentType': record.treatmentType,
+        'diagnosis': record.diagnosis,
+        'notes': record.notes,
+        'images': record.images,
+      };
+      print('بيانات السجل: $recordData'); // للتشخيص
+      await docRef.set(recordData);
+      print('تم حفظ السجل بنجاح برقم: ${docRef.id}'); // للتشخيص
+      return docRef.id;
+    } catch (e) {
+      print('خطأ في createMedicalRecord: $e'); // للتشخيص
+      throw Exception('فشل إضافة السجل الطبي: $e');
+    }
+  }
+
+  /// جلب سجلات مريض محدد
+  Future<List<MedicalRecordModel>> getPatientMedicalRecords(String patientId) async {
+    try {
+      print('البحث عن السجلات للمريض: $patientId'); // للتشخيص
+      final querySnapshot = await _firestore
+          .collection(medicalRecordsCollection)
+          .where('patientId', isEqualTo: patientId)
+          .get();
+
+      print('تم العثور على ${querySnapshot.docs.length} وثيقة'); // للتشخيص
+
+      final records = querySnapshot.docs.map((doc) {
+        final data = doc.data();
+        data['id'] = doc.id;
+        print('معالجة سجل: ${doc.id}, patientId: ${data['patientId']}'); // للتشخيص
+        return MedicalRecordModel.fromJson(data);
+      }).toList();
+      
+      // ترتيب السجلات حسب التاريخ (الأحدث أولاً)
+      records.sort((a, b) => b.date.compareTo(a.date));
+      
+      return records;
+    } catch (e) {
+      print('خطأ في getPatientMedicalRecords: $e'); // للتشخيص
+      throw Exception('فشل جلب السجلات الطبية: $e');
+    }
+  }
+
+  /// جلب مريض بالمعرف (للمسح الباركود)
+  Future<PatientModel?> getPatientById(String patientId) async {
+    try {
+      final doc = await _firestore
+          .collection(patientsCollection)
+          .doc(patientId)
+          .get();
+
+      if (!doc.exists) {
+        return null;
+      }
+
+      final data = doc.data()!;
+      data['id'] = doc.id;
+      return PatientModel.fromJson(data);
+    } catch (e) {
+      throw Exception('فشل جلب بيانات المريض: $e');
+    }
+  }
+
+  // ============ Messages ============
+
+  /// إرسال رسالة جديدة
+  Future<String> sendMessage({
+    required String senderId,
+    required String receiverId,
+    required String message,
+  }) async {
+    try {
+      final docRef = _firestore.collection(messagesCollection).doc();
+      final messageData = {
+        'id': docRef.id,
+        'senderId': senderId,
+        'receiverId': receiverId,
+        'message': message,
+        'timestamp': FieldValue.serverTimestamp(),
+        'isRead': false,
+      };
+      await docRef.set(messageData);
+      return docRef.id;
+    } catch (e) {
+      throw Exception('فشل إرسال الرسالة: $e');
+    }
+  }
+
+  /// جلب الرسائل بين مستخدمين (Stream للوقت الفعلي)
+  Stream<List<MessageModel>> getMessagesStream({
+    required String userId1,
+    required String userId2,
+  }) {
+    try {
+      final controller = StreamController<List<MessageModel>>();
+      final allMessages = <String, MessageModel>{};
+      
+      // جلب الرسائل من كلا الاتجاهين
+      final stream1 = _firestore
+          .collection(messagesCollection)
+          .where('senderId', isEqualTo: userId1)
+          .where('receiverId', isEqualTo: userId2)
+          .orderBy('timestamp', descending: false)
+          .snapshots();
+
+      final stream2 = _firestore
+          .collection(messagesCollection)
+          .where('senderId', isEqualTo: userId2)
+          .where('receiverId', isEqualTo: userId1)
+          .orderBy('timestamp', descending: false)
+          .snapshots();
+
+      StreamSubscription? sub1;
+      StreamSubscription? sub2;
+      
+      void updateMessages() {
+        final messages = allMessages.values.toList();
+        messages.sort((a, b) => a.timestamp.compareTo(b.timestamp));
+        controller.add(messages);
+      }
+      
+      sub1 = stream1.listen((snapshot) {
+        for (var doc in snapshot.docs) {
+          final data = doc.data();
+          data['id'] = doc.id;
+          if (data['timestamp'] == null) {
+            data['timestamp'] = DateTime.now().toIso8601String();
+          } else if (data['timestamp'] is Timestamp) {
+            data['timestamp'] = (data['timestamp'] as Timestamp).toDate().toIso8601String();
+          }
+          final message = MessageModel.fromJson(data);
+          allMessages[message.id] = message;
+        }
+        updateMessages();
+      });
+      
+      sub2 = stream2.listen((snapshot) {
+        for (var doc in snapshot.docs) {
+          final data = doc.data();
+          data['id'] = doc.id;
+          if (data['timestamp'] == null) {
+            data['timestamp'] = DateTime.now().toIso8601String();
+          } else if (data['timestamp'] is Timestamp) {
+            data['timestamp'] = (data['timestamp'] as Timestamp).toDate().toIso8601String();
+          }
+          final message = MessageModel.fromJson(data);
+          allMessages[message.id] = message;
+        }
+        updateMessages();
+      });
+      
+      controller.onCancel = () {
+        sub1?.cancel();
+        sub2?.cancel();
+      };
+      
+      return controller.stream;
+    } catch (e) {
+      throw Exception('فشل جلب الرسائل: $e');
+    }
+  }
+
+  /// جلب الرسائل (للاستخدام غير المتزامن)
+  Future<List<MessageModel>> getMessages({
+    required String userId1,
+    required String userId2,
+    int limit = 50,
+  }) async {
+    try {
+      // جلب الرسائل من كلا الاتجاهين
+      final query1 = await _firestore
+          .collection(messagesCollection)
+          .where('senderId', isEqualTo: userId1)
+          .where('receiverId', isEqualTo: userId2)
+          .orderBy('timestamp', descending: false)
+          .limit(limit)
+          .get();
+
+      final query2 = await _firestore
+          .collection(messagesCollection)
+          .where('senderId', isEqualTo: userId2)
+          .where('receiverId', isEqualTo: userId1)
+          .orderBy('timestamp', descending: false)
+          .limit(limit)
+          .get();
+
+      final allMessages = <String, MessageModel>{};
+      
+      for (var doc in query1.docs) {
+        final data = doc.data();
+        data['id'] = doc.id;
+        if (data['timestamp'] == null) {
+          data['timestamp'] = DateTime.now().toIso8601String();
+        } else if (data['timestamp'] is Timestamp) {
+          data['timestamp'] = (data['timestamp'] as Timestamp).toDate().toIso8601String();
+        }
+        final message = MessageModel.fromJson(data);
+        allMessages[message.id] = message;
+      }
+      
+      for (var doc in query2.docs) {
+        final data = doc.data();
+        data['id'] = doc.id;
+        if (data['timestamp'] == null) {
+          data['timestamp'] = DateTime.now().toIso8601String();
+        } else if (data['timestamp'] is Timestamp) {
+          data['timestamp'] = (data['timestamp'] as Timestamp).toDate().toIso8601String();
+        }
+        final message = MessageModel.fromJson(data);
+        allMessages[message.id] = message;
+      }
+      
+      final messages = allMessages.values.toList();
+      messages.sort((a, b) => a.timestamp.compareTo(b.timestamp));
+      return messages;
+    } catch (e) {
+      throw Exception('فشل جلب الرسائل: $e');
+    }
+  }
+
+  /// تحديث حالة القراءة للرسائل
+  Future<void> markMessagesAsRead({
+    required String userId1,
+    required String userId2,
+  }) async {
+    try {
+      final querySnapshot = await _firestore
+          .collection(messagesCollection)
+          .where('senderId', isEqualTo: userId2)
+          .where('receiverId', isEqualTo: userId1)
+          .where('isRead', isEqualTo: false)
+          .get();
+
+      final batch = _firestore.batch();
+      for (var doc in querySnapshot.docs) {
+        batch.update(doc.reference, {'isRead': true});
+      }
+      await batch.commit();
+    } catch (e) {
+      throw Exception('فشل تحديث حالة القراءة: $e');
     }
   }
 }
