@@ -218,6 +218,17 @@ class _ChatScreenState extends State<ChatScreen> {
                   return const LoadingWidget(message: 'جاري تحميل الرسائل...');
                 }
                 
+                // التمرير تلقائياً عند إضافة رسالة جديدة
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (_scrollController.hasClients && _chatController.messages.isNotEmpty) {
+                    _scrollController.animateTo(
+                      0,
+                      duration: Duration(milliseconds: 300),
+                      curve: Curves.easeOut,
+                    );
+                  }
+                });
+                
                 return ListView.builder(
                   controller: _scrollController,
                   padding: EdgeInsets.symmetric(horizontal: 24.w, vertical: 16.h),
@@ -225,7 +236,7 @@ class _ChatScreenState extends State<ChatScreen> {
                   itemCount: _chatController.messages.length,
                   itemBuilder: (context, index) {
                     final message = _chatController.messages[_chatController.messages.length - 1 - index];
-                    final currentUserId = _authController.currentUser.value?.id ?? '';
+                    final currentUserId = _chatController.currentUserId ?? '';
                     final isSent = message.senderId == currentUserId;
                     // Format time without locale
                     final hour = message.timestamp.hour;

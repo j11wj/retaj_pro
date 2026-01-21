@@ -193,6 +193,71 @@ class FirebaseService {
     }
   }
 
+  /// تحديث بيانات عيادة
+  Future<void> updateClinic(String clinicId, Map<String, dynamic> data) async {
+    try {
+      await _firestore
+          .collection(clinicsCollection)
+          .doc(clinicId)
+          .update(data);
+    } catch (e) {
+      throw Exception('فشل تحديث بيانات العيادة: $e');
+    }
+  }
+
+  /// حذف عيادة
+  Future<void> deleteClinic(String clinicId) async {
+    try {
+      await _firestore
+          .collection(clinicsCollection)
+          .doc(clinicId)
+          .delete();
+    } catch (e) {
+      throw Exception('فشل حذف العيادة: $e');
+    }
+  }
+
+  /// تحديث بيانات طبيب
+  Future<void> updateDoctor(String doctorId, Map<String, dynamic> data) async {
+    try {
+      await _firestore
+          .collection(doctorsCollection)
+          .doc(doctorId.toUpperCase())
+          .update(data);
+    } catch (e) {
+      throw Exception('فشل تحديث بيانات الطبيب: $e');
+    }
+  }
+
+  /// حذف طبيب
+  Future<void> deleteDoctor(String doctorId) async {
+    try {
+      await _firestore
+          .collection(doctorsCollection)
+          .doc(doctorId.toUpperCase())
+          .delete();
+    } catch (e) {
+      throw Exception('فشل حذف الطبيب: $e');
+    }
+  }
+
+  /// جلب جميع الحجوزات
+  Future<List<AppointmentModel>> getAllAppointments() async {
+    try {
+      final querySnapshot = await _firestore
+          .collection(appointmentsCollection)
+          .get();
+
+      return querySnapshot.docs.map((doc) {
+        final data = doc.data();
+        data['id'] = doc.id;
+        return AppointmentModel.fromJson(data);
+      }).toList();
+    } catch (e) {
+      throw Exception('فشل جلب قائمة الحجوزات: $e');
+    }
+  }
+
   /// إضافة بيانات تجريبية للعيادات
   Future<void> seedClinics() async {
     try {
@@ -537,35 +602,73 @@ class FirebaseService {
         controller.add(messages);
       }
       
-      sub1 = stream1.listen((snapshot) {
-        for (var doc in snapshot.docs) {
-          final data = doc.data();
-          data['id'] = doc.id;
-          if (data['timestamp'] == null) {
-            data['timestamp'] = DateTime.now().toIso8601String();
-          } else if (data['timestamp'] is Timestamp) {
-            data['timestamp'] = (data['timestamp'] as Timestamp).toDate().toIso8601String();
+      sub1 = stream1.listen(
+        (snapshot) {
+          // معالجة التغييرات في Stream
+          for (var change in snapshot.docChanges) {
+            if (change.type == DocumentChangeType.removed) {
+              // حذف الرسالة إذا تم حذفها
+              allMessages.remove(change.doc.id);
+            } else {
+              // إضافة أو تحديث الرسالة
+              final data = change.doc.data();
+              if (data != null) {
+                data['id'] = change.doc.id;
+                if (data['timestamp'] == null) {
+                  data['timestamp'] = DateTime.now().toIso8601String();
+                } else if (data['timestamp'] is Timestamp) {
+                  data['timestamp'] = (data['timestamp'] as Timestamp).toDate().toIso8601String();
+                }
+                try {
+                  final message = MessageModel.fromJson(data);
+                  allMessages[message.id] = message;
+                } catch (e) {
+                  print('خطأ في تحويل الرسالة: $e');
+                }
+              }
+            }
           }
-          final message = MessageModel.fromJson(data);
-          allMessages[message.id] = message;
-        }
-        updateMessages();
-      });
+          updateMessages();
+        },
+        onError: (error) {
+          print('خطأ في stream1: $error');
+          controller.addError(error);
+        },
+      );
       
-      sub2 = stream2.listen((snapshot) {
-        for (var doc in snapshot.docs) {
-          final data = doc.data();
-          data['id'] = doc.id;
-          if (data['timestamp'] == null) {
-            data['timestamp'] = DateTime.now().toIso8601String();
-          } else if (data['timestamp'] is Timestamp) {
-            data['timestamp'] = (data['timestamp'] as Timestamp).toDate().toIso8601String();
+      sub2 = stream2.listen(
+        (snapshot) {
+          // معالجة التغييرات في Stream
+          for (var change in snapshot.docChanges) {
+            if (change.type == DocumentChangeType.removed) {
+              // حذف الرسالة إذا تم حذفها
+              allMessages.remove(change.doc.id);
+            } else {
+              // إضافة أو تحديث الرسالة
+              final data = change.doc.data();
+              if (data != null) {
+                data['id'] = change.doc.id;
+                if (data['timestamp'] == null) {
+                  data['timestamp'] = DateTime.now().toIso8601String();
+                } else if (data['timestamp'] is Timestamp) {
+                  data['timestamp'] = (data['timestamp'] as Timestamp).toDate().toIso8601String();
+                }
+                try {
+                  final message = MessageModel.fromJson(data);
+                  allMessages[message.id] = message;
+                } catch (e) {
+                  print('خطأ في تحويل الرسالة: $e');
+                }
+              }
+            }
           }
-          final message = MessageModel.fromJson(data);
-          allMessages[message.id] = message;
-        }
-        updateMessages();
-      });
+          updateMessages();
+        },
+        onError: (error) {
+          print('خطأ في stream2: $error');
+          controller.addError(error);
+        },
+      );
       
       controller.onCancel = () {
         sub1?.cancel();
@@ -585,6 +688,8 @@ class FirebaseService {
     int limit = 50,
   }) async {
     try {
+      print('جلب الرسائل: userId1=$userId1, userId2=$userId2'); // للتشخيص
+      
       // جلب الرسائل من كلا الاتجاهين
       final query1 = await _firestore
           .collection(messagesCollection)
@@ -593,6 +698,8 @@ class FirebaseService {
           .orderBy('timestamp', descending: false)
           .limit(limit)
           .get();
+      
+      print('الرسائل المرسلة من $userId1 إلى $userId2: ${query1.docs.length}'); // للتشخيص
 
       final query2 = await _firestore
           .collection(messagesCollection)
@@ -601,6 +708,8 @@ class FirebaseService {
           .orderBy('timestamp', descending: false)
           .limit(limit)
           .get();
+      
+      print('الرسائل المرسلة من $userId2 إلى $userId1: ${query2.docs.length}'); // للتشخيص
 
       final allMessages = <String, MessageModel>{};
       
@@ -630,6 +739,7 @@ class FirebaseService {
       
       final messages = allMessages.values.toList();
       messages.sort((a, b) => a.timestamp.compareTo(b.timestamp));
+      print('إجمالي الرسائل: ${messages.length}'); // للتشخيص
       return messages;
     } catch (e) {
       throw Exception('فشل جلب الرسائل: $e');
@@ -656,6 +766,294 @@ class FirebaseService {
       await batch.commit();
     } catch (e) {
       throw Exception('فشل تحديث حالة القراءة: $e');
+    }
+  }
+
+  // ============ Demo Data ============
+
+  /// إضافة بيانات تجريبية للاختبار (أطباء، مرضى، حجوزات)
+  Future<void> seedDemoData() async {
+    try {
+      // التحقق من وجود بيانات
+      final existingPatients = await getAllPatients();
+      final existingDoctors = await getAllDoctors();
+      final existingAppointments = await getAllAppointments();
+
+      if (existingPatients.isNotEmpty || existingDoctors.isNotEmpty || existingAppointments.isNotEmpty) {
+        print('يوجد بيانات موجودة بالفعل. سيتم إضافة بيانات إضافية فقط.');
+      }
+
+      // جلب العيادات
+      final clinics = await getAllClinics();
+      if (clinics.isEmpty) {
+        await seedClinics();
+        final updatedClinics = await getAllClinics();
+        clinics.addAll(updatedClinics);
+      }
+
+      // إنشاء أطباء تجريبيين
+      final demoDoctors = [
+        UserModel(
+          id: '',
+          name: 'د. سجاد الساعاتي',
+          phoneNumber: '07901234567',
+          userType: 'doctor',
+          doctorId: 'DOC001',
+          doctorCode: '1234',
+          clinicId: clinics.isNotEmpty ? clinics[0].id : 'clinic_1',
+        ),
+        UserModel(
+          id: '',
+          name: 'د. أحمد محمد',
+          phoneNumber: '07901234568',
+          userType: 'doctor',
+          doctorId: 'DOC002',
+          doctorCode: '5678',
+          clinicId: clinics.length > 1 ? clinics[1].id : clinics.isNotEmpty ? clinics[0].id : 'clinic_2',
+        ),
+        UserModel(
+          id: '',
+          name: 'د. فاطمة علي',
+          phoneNumber: '07901234569',
+          userType: 'doctor',
+          doctorId: 'DOC003',
+          doctorCode: '9012',
+          clinicId: clinics.length > 2 ? clinics[2].id : clinics.isNotEmpty ? clinics[0].id : 'clinic_3',
+        ),
+        UserModel(
+          id: '',
+          name: 'د. محمود حسن',
+          phoneNumber: '07901234570',
+          userType: 'doctor',
+          doctorId: 'DOC004',
+          doctorCode: '3456',
+          clinicId: clinics.length > 3 ? clinics[3].id : clinics.isNotEmpty ? clinics[0].id : 'clinic_4',
+        ),
+        UserModel(
+          id: '',
+          name: 'د. ليلى أحمد',
+          phoneNumber: '07901234571',
+          userType: 'doctor',
+          doctorId: 'DOC005',
+          doctorCode: '7890',
+          clinicId: clinics.length > 4 ? clinics[4].id : clinics.isNotEmpty ? clinics[0].id : 'clinic_5',
+        ),
+      ];
+
+      // إضافة الأطباء
+      for (var doctor in demoDoctors) {
+        try {
+          final existing = await getDoctorByIdAndCode(doctor.doctorId!, '');
+          if (existing == null) {
+            await createDoctor(doctor);
+            print('تم إضافة الطبيب: ${doctor.name}');
+          }
+        } catch (e) {
+          print('خطأ في إضافة الطبيب ${doctor.name}: $e');
+        }
+      }
+
+      // جلب الأطباء المضافة
+      final addedDoctors = await getAllDoctors();
+
+      // إنشاء مرضى تجريبيين
+      final demoPatients = [
+        PatientModel(
+          id: 'patient_${DateTime.now().millisecondsSinceEpoch}_1',
+          name: 'محمد علي',
+          phoneNumber: '07911111111',
+          gender: 'ذكر',
+          age: 35,
+          city: 'بغداد',
+          doctorId: addedDoctors.isNotEmpty ? addedDoctors[0].doctorId : 'DOC001',
+        ),
+        PatientModel(
+          id: 'patient_${DateTime.now().millisecondsSinceEpoch}_2',
+          name: 'فاطمة أحمد',
+          phoneNumber: '07922222222',
+          gender: 'أنثى',
+          age: 28,
+          city: 'البصرة',
+          doctorId: addedDoctors.length > 1 ? addedDoctors[1].doctorId : 'DOC002',
+        ),
+        PatientModel(
+          id: 'patient_${DateTime.now().millisecondsSinceEpoch}_3',
+          name: 'علي حسن',
+          phoneNumber: '07933333333',
+          gender: 'ذكر',
+          age: 45,
+          city: 'الموصل',
+          doctorId: addedDoctors.length > 2 ? addedDoctors[2].doctorId : 'DOC003',
+        ),
+        PatientModel(
+          id: 'patient_${DateTime.now().millisecondsSinceEpoch}_4',
+          name: 'سارة محمود',
+          phoneNumber: '07944444444',
+          gender: 'أنثى',
+          age: 32,
+          city: 'أربيل',
+          doctorId: addedDoctors.length > 3 ? addedDoctors[3].doctorId : 'DOC004',
+        ),
+        PatientModel(
+          id: 'patient_${DateTime.now().millisecondsSinceEpoch}_5',
+          name: 'حسن كريم',
+          phoneNumber: '07955555555',
+          gender: 'ذكر',
+          age: 50,
+          city: 'كربلاء',
+          doctorId: addedDoctors.length > 4 ? addedDoctors[4].doctorId : 'DOC005',
+        ),
+        PatientModel(
+          id: 'patient_${DateTime.now().millisecondsSinceEpoch}_6',
+          name: 'نورا خالد',
+          phoneNumber: '07966666666',
+          gender: 'أنثى',
+          age: 25,
+          city: 'السليمانية',
+          doctorId: addedDoctors.isNotEmpty ? addedDoctors[0].doctorId : 'DOC001',
+        ),
+        PatientModel(
+          id: 'patient_${DateTime.now().millisecondsSinceEpoch}_7',
+          name: 'يوسف عمر',
+          phoneNumber: '07977777777',
+          gender: 'ذكر',
+          age: 40,
+          city: 'النجف',
+          doctorId: addedDoctors.length > 1 ? addedDoctors[1].doctorId : 'DOC002',
+        ),
+        PatientModel(
+          id: 'patient_${DateTime.now().millisecondsSinceEpoch}_8',
+          name: 'ريم علي',
+          phoneNumber: '07988888888',
+          gender: 'أنثى',
+          age: 30,
+          city: 'بابل',
+          doctorId: addedDoctors.length > 2 ? addedDoctors[2].doctorId : 'DOC003',
+        ),
+      ];
+
+      // إضافة المرضى
+      for (var patient in demoPatients) {
+        try {
+          final existing = await getPatientByPhone(patient.phoneNumber);
+          if (existing == null) {
+            await createPatient(patient);
+            print('تم إضافة المريض: ${patient.name}');
+          }
+        } catch (e) {
+          print('خطأ في إضافة المريض ${patient.name}: $e');
+        }
+      }
+
+      // جلب المرضى المضافة
+      final addedPatients = await getAllPatients();
+
+      // التاريخ الحالي: 2026-1-21
+      final currentDate = DateTime(2026, 1, 21);
+      
+      // إنشاء حجوزات للشهر السابق (ديسمبر 2025)
+      final lastMonthAppointments = <AppointmentModel>[];
+      for (int i = 0; i < 10; i++) {
+        final day = 1 + (i % 28); // توزيع على أيام الشهر
+        final hour = 9 + (i % 8); // من 9 صباحاً إلى 5 مساءً
+        final appointmentDate = DateTime(2025, 12, day, hour, (i % 2) * 30);
+        
+        if (addedPatients.isNotEmpty && addedDoctors.isNotEmpty) {
+          final patient = addedPatients[i % addedPatients.length];
+          final doctor = addedDoctors[i % addedDoctors.length];
+          
+          lastMonthAppointments.add(AppointmentModel(
+            id: '',
+            patientId: patient.id,
+            patientName: patient.name,
+            doctorId: doctor.doctorId ?? doctor.id,
+            doctorName: doctor.name,
+            date: appointmentDate,
+            time: '${appointmentDate.hour.toString().padLeft(2, '0')}:${appointmentDate.minute.toString().padLeft(2, '0')}',
+            status: 'completed',
+            notes: 'حجز تجريبي - ديسمبر 2025',
+          ));
+        }
+      }
+
+      // إنشاء حجوزات للشهر الحالي (يناير 2026)
+      final currentMonthAppointments = <AppointmentModel>[];
+      for (int i = 0; i < 15; i++) {
+        final day = 1 + (i % 21); // حتى 21 يناير
+        final hour = 9 + (i % 8);
+        final appointmentDate = DateTime(2026, 1, day, hour, (i % 2) * 30);
+        
+        // تحديد الحالة بناءً على التاريخ
+        String status;
+        if (appointmentDate.isBefore(currentDate)) {
+          status = 'completed';
+        } else if (appointmentDate.day == currentDate.day) {
+          status = 'scheduled';
+        } else {
+          status = 'scheduled';
+        }
+        
+        if (addedPatients.isNotEmpty && addedDoctors.isNotEmpty) {
+          final patient = addedPatients[i % addedPatients.length];
+          final doctor = addedDoctors[i % addedDoctors.length];
+          
+          currentMonthAppointments.add(AppointmentModel(
+            id: '',
+            patientId: patient.id,
+            patientName: patient.name,
+            doctorId: doctor.doctorId ?? doctor.id,
+            doctorName: doctor.name,
+            date: appointmentDate,
+            time: '${appointmentDate.hour.toString().padLeft(2, '0')}:${appointmentDate.minute.toString().padLeft(2, '0')}',
+            status: status,
+            notes: 'حجز تجريبي - يناير 2026',
+          ));
+        }
+      }
+
+      // إنشاء حجوزات للشهر القادم (فبراير 2026)
+      final nextMonthAppointments = <AppointmentModel>[];
+      for (int i = 0; i < 12; i++) {
+        final day = 1 + (i % 28);
+        final hour = 9 + (i % 8);
+        final appointmentDate = DateTime(2026, 2, day, hour, (i % 2) * 30);
+        
+        if (addedPatients.isNotEmpty && addedDoctors.isNotEmpty) {
+          final patient = addedPatients[i % addedPatients.length];
+          final doctor = addedDoctors[i % addedDoctors.length];
+          
+          nextMonthAppointments.add(AppointmentModel(
+            id: '',
+            patientId: patient.id,
+            patientName: patient.name,
+            doctorId: doctor.doctorId ?? doctor.id,
+            doctorName: doctor.name,
+            date: appointmentDate,
+            time: '${appointmentDate.hour.toString().padLeft(2, '0')}:${appointmentDate.minute.toString().padLeft(2, '0')}',
+            status: 'scheduled',
+            notes: 'حجز تجريبي - فبراير 2026',
+          ));
+        }
+      }
+
+      // إضافة جميع الحجوزات
+      final allAppointments = [
+        ...lastMonthAppointments,
+        ...currentMonthAppointments,
+        ...nextMonthAppointments,
+      ];
+
+      for (var appointment in allAppointments) {
+        try {
+          await createAppointment(appointment);
+        } catch (e) {
+          print('خطأ في إضافة الحجز: $e');
+        }
+      }
+
+      print('تم إضافة ${demoDoctors.length} طبيب، ${demoPatients.length} مريض، و ${allAppointments.length} حجز بنجاح');
+    } catch (e) {
+      throw Exception('فشل إضافة البيانات التجريبية: $e');
     }
   }
 }

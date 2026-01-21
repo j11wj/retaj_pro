@@ -2,6 +2,7 @@ import 'package:get/get.dart';
 import 'package:farah_sys_final/models/message_model.dart';
 import 'package:farah_sys_final/services/chat_service.dart';
 import 'package:farah_sys_final/controllers/auth_controller.dart';
+import 'package:farah_sys_final/controllers/patient_controller.dart';
 
 class ChatController extends GetxController {
   final _chatService = ChatService();
@@ -18,6 +19,38 @@ class ChatController extends GetxController {
     super.onClose();
   }
 
+  // جلب معرف المستخدم الحالي الصحيح
+  String? _getCurrentUserId() {
+    final authController = Get.find<AuthController>();
+    final currentUser = authController.currentUser.value;
+    
+    if (currentUser == null) {
+      return null;
+    }
+    
+    // إذا كان المستخدم طبيباً، استخدم doctorId
+    if (currentUser.userType == 'doctor') {
+      return currentUser.doctorId ?? currentUser.id;
+    }
+    
+    // إذا كان المستخدم مريضاً، استخدم patient.id من myProfile
+    if (currentUser.userType == 'patient') {
+      try {
+        final patientController = Get.find<PatientController>();
+        final patient = patientController.myProfile.value;
+        if (patient != null) {
+          return patient.id;
+        }
+      } catch (e) {
+        print('خطأ في جلب معرف المريض: $e');
+      }
+      // إذا لم نجد patient، استخدم currentUser.id
+      return currentUser.id;
+    }
+    
+    return currentUser.id;
+  }
+
   // جلب الرسائل من Firebase
   Future<void> loadMessages({
     required String otherUserId,
@@ -27,14 +60,14 @@ class ChatController extends GetxController {
       isLoading.value = true;
       this.otherUserId = otherUserId;
       
-      final authController = Get.find<AuthController>();
-      final currentUser = authController.currentUser.value;
-      
-      if (currentUser == null) {
+      final userId = _getCurrentUserId();
+      if (userId == null) {
         throw Exception('المستخدم غير مسجل دخول');
       }
       
-      currentUserId = currentUser.id;
+      currentUserId = userId;
+      
+      print('جلب الرسائل: currentUserId=$currentUserId, otherUserId=$otherUserId'); // للتشخيص
       
       final messagesList = await _chatService.getMessages(
         userId1: currentUserId!,
@@ -58,23 +91,25 @@ class ChatController extends GetxController {
     try {
       this.otherUserId = otherUserId;
       
-      final authController = Get.find<AuthController>();
-      final currentUser = authController.currentUser.value;
-      
-      if (currentUser == null) {
+      final userId = _getCurrentUserId();
+      if (userId == null) {
         throw Exception('المستخدم غير مسجل دخول');
       }
       
-      currentUserId = currentUser.id;
+      currentUserId = userId;
+      
+      print('الاشتراك في الرسائل: currentUserId=$currentUserId, otherUserId=$otherUserId'); // للتشخيص
       
       _chatService.subscribeToMessages(
         userId1: currentUserId!,
         userId2: otherUserId,
         onMessages: (newMessages) {
+          print('تم استلام ${newMessages.length} رسالة جديدة'); // للتشخيص
           messages.value = newMessages;
           messages.sort((a, b) => a.timestamp.compareTo(b.timestamp));
         },
         onError: (error) {
+          print('خطأ في الاشتراك: $error'); // للتشخيص
           isConnected.value = false;
           Get.snackbar('خطأ', 'انقطع الاتصال');
         },

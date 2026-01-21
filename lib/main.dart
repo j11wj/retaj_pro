@@ -31,6 +31,11 @@ import 'package:farah_sys_final/controllers/chat_controller.dart';
 import 'package:farah_sys_final/controllers/clinic_controller.dart';
 import 'package:farah_sys_final/views/clinic_selection_screen.dart';
 import 'package:farah_sys_final/views/add_doctor_screen.dart';
+import 'package:farah_sys_final/views/admin_screen.dart';
+import 'package:farah_sys_final/views/admin_clinics_screen.dart';
+import 'package:farah_sys_final/views/admin_doctors_screen.dart';
+import 'package:farah_sys_final/views/admin_appointments_screen.dart';
+import 'package:farah_sys_final/views/admin_statistics_screen.dart';
 import 'package:farah_sys_final/services/firebase_service.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
@@ -176,6 +181,26 @@ class MyApp extends StatelessWidget {
             GetPage(
               name: AppRoutes.addDoctor,
               page: () => const AddDoctorScreen(),
+            ),
+            GetPage(
+              name: AppRoutes.admin,
+              page: () => const AdminScreen(),
+            ),
+            GetPage(
+              name: AppRoutes.adminClinics,
+              page: () => const AdminClinicsScreen(),
+            ),
+            GetPage(
+              name: AppRoutes.adminDoctors,
+              page: () => const AdminDoctorsScreen(),
+            ),
+            GetPage(
+              name: AppRoutes.adminAppointments,
+              page: () => const AdminAppointmentsScreen(),
+            ),
+            GetPage(
+              name: AppRoutes.adminStatistics,
+              page: () => const AdminStatisticsScreen(),
             ),
           ],
           builder: (context, widget) {

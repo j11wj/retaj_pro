@@ -18,4 +18,9 @@ class AppRoutes {
   static const String doctorProfile = '/doctor-profile';
   static const String medicalRecords = '/medical-records';
   static const String addDoctor = '/add-doctor';
+  static const String admin = '/admin';
+  static const String adminClinics = '/admin-clinics';
+  static const String adminDoctors = '/admin-doctors';
+  static const String adminAppointments = '/admin-appointments';
+  static const String adminStatistics = '/admin-statistics';
 }

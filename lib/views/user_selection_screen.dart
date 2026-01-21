@@ -116,6 +116,18 @@ class _UserSelectionScreenState extends State<UserSelectionScreen> {
                     : AppColors.primary,
                 width: double.infinity,
               ),
+              SizedBox(height: 16.h),
+              TextButton.icon(
+                onPressed: () => Get.toNamed(AppRoutes.admin),
+                icon: Icon(Icons.admin_panel_settings, color: Colors.grey),
+                label: Text(
+                  'لوحة تحكم الأدمن',
+                  style: TextStyle(
+                    fontSize: 14.sp,
+                    color: Colors.grey,
+                  ),
+                ),
+              ),
             ],
           ),
         ),

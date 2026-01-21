@@ -38,7 +38,10 @@ class PatientHomeScreen extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   GestureDetector(
-                    onTap: () {},
+                    onTap: () {
+                      // العودة لاختيار العيادات
+                      Get.offAllNamed(AppRoutes.clinicSelection);
+                    },
                     child: Container(
                       padding: EdgeInsets.all(8.w),
                       decoration: BoxDecoration(
@@ -46,7 +49,7 @@ class PatientHomeScreen extends StatelessWidget {
                         borderRadius: BorderRadius.circular(12.r),
                       ),
                       child: Icon(
-                        Icons.notifications_outlined,
+                        Icons.arrow_back,
                         color: AppColors.primary,
                         size: 24.sp,
                       ),
@@ -188,12 +191,8 @@ class PatientHomeScreen extends StatelessWidget {
                           // البحث عن الطبيب المرتبط بالعيادة
                           String? doctorId;
                           
-                          // أولاً: محاولة الحصول على doctorId من بيانات المريض
-                          if (profile.doctorId != null && profile.doctorId!.isNotEmpty) {
-                            doctorId = profile.doctorId;
-                          } 
-                          // ثانياً: البحث عن الطبيب المرتبط بالعيادة المختارة
-                          else if (clinic != null) {
+                          // أولاً: البحث عن الطبيب المرتبط بالعيادة المختارة (الأولوية للعيادة)
+                          if (clinic != null) {
                             try {
                               print('البحث عن الطبيب المرتبط بالعيادة: ${clinic.id}'); // للتشخيص
                               final firebaseService = FirebaseService();
@@ -222,7 +221,7 @@ class PatientHomeScreen extends StatelessWidget {
                             }
                           }
                           
-                          // ثالثاً: إذا لم نجد طبيباً، نبحث بالاسم
+                          // ثانياً: إذا لم نجد طبيباً من العيادة، نبحث بالاسم
                           if (doctorId == null || doctorId.isEmpty) {
                             if (clinic != null && clinic.doctorName != null) {
                               print('البحث عن الطبيب بالاسم: ${clinic.doctorName}'); // للتشخيص
@@ -240,31 +239,19 @@ class PatientHomeScreen extends StatelessWidget {
                                 print('خطأ في البحث عن الطبيب بالاسم: $e'); // للتشخيص
                               }
                             }
-                            
-                            // رابعاً: إذا لم نجد طبيباً، نستخدم أول طبيب متاح
-                            if (doctorId == null || doctorId.isEmpty) {
-                              try {
-                                final firebaseService = FirebaseService();
-                                final doctors = await firebaseService.getAllDoctors();
-                                if (doctors.isNotEmpty) {
-                                  final firstDoctor = doctors.firstWhere(
-                                    (doc) => doc.doctorId != null,
-                                    orElse: () => doctors.first,
-                                  );
-                                  if (firstDoctor.doctorId != null) {
-                                    doctorId = firstDoctor.doctorId;
-                                    print('استخدام أول طبيب متاح: $doctorId'); // للتشخيص
-                                  }
-                                }
-                              } catch (e) {
-                                print('خطأ في جلب الأطباء: $e'); // للتشخيص
-                              }
+                          }
+                          
+                          // ثالثاً: إذا لم نجد طبيباً، نستخدم doctorId من بيانات المريض (كحل أخير)
+                          if (doctorId == null || doctorId.isEmpty) {
+                            if (profile.doctorId != null && profile.doctorId!.isNotEmpty) {
+                              doctorId = profile.doctorId;
+                              print('استخدام doctorId من بيانات المريض: $doctorId'); // للتشخيص
                             }
-                            
-                            if (doctorId == null || doctorId.isEmpty) {
-                              Get.snackbar('خطأ', 'لم يتم العثور على طبيب. يرجى التأكد من وجود أطباء في النظام');
-                              return;
-                            }
+                          }
+                          
+                          if (doctorId == null || doctorId.isEmpty) {
+                            Get.snackbar('خطأ', 'لم يتم العثور على طبيب مرتبط بهذه العيادة');
+                            return;
                           }
                           
                           print('فتح المحادثة مع الطبيب: $doctorId'); // للتشخيص
