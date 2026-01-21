@@ -90,6 +90,8 @@ class _AddDoctorScreenState extends State<AddDoctorScreen> {
                 keyboardType: TextInputType.phone,
               ),
               SizedBox(height: 24.h),
+
+             
               Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
@@ -191,8 +193,9 @@ class _AddDoctorScreenState extends State<AddDoctorScreen> {
       ),
       builder: (context) {
         return Container(
+         
           padding: EdgeInsets.symmetric(vertical: 16.h),
-          child: Column(
+          child: SingleChildScrollView(child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               Container(
@@ -230,7 +233,7 @@ class _AddDoctorScreenState extends State<AddDoctorScreen> {
                 );
               }),
             ],
-          ),
+          ),),
         );
       },
     );

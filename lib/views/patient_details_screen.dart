@@ -509,13 +509,17 @@ class _PatientDetailsScreenState extends State<PatientDetailsScreen>
           borderRadius: BorderRadius.circular(20.r),
         ),
         child: Container(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(context).size.height * 0.8,
+          ),
           padding: EdgeInsets.all(24.w),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                'إضافة موعد جديد',
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  'إضافة موعد جديد',
                 style: TextStyle(
                   fontSize: 20.sp,
                   fontWeight: FontWeight.bold,
@@ -637,6 +641,7 @@ class _PatientDetailsScreenState extends State<PatientDetailsScreen>
                 ],
               ),
             ],
+            ),
           ),
         ),
       ),
@@ -656,9 +661,13 @@ class _PatientDetailsScreenState extends State<PatientDetailsScreen>
           borderRadius: BorderRadius.circular(20.r),
         ),
         child: Container(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(context).size.height * 0.8,
+          ),
           padding: EdgeInsets.all(24.w),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Text(
@@ -756,6 +765,7 @@ class _PatientDetailsScreenState extends State<PatientDetailsScreen>
                 ],
               ),
             ],
+            ),
           ),
         ),
       ),
