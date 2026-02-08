@@ -14,6 +14,219 @@ import 'package:farah_sys_final/models/user_model.dart';
 class PatientHomeScreen extends StatelessWidget {
   const PatientHomeScreen({super.key});
 
+  void _showBookAppointmentDialog(BuildContext context) {
+    final appointmentController = Get.find<AppointmentController>();
+    final clinicController = Get.find<ClinicController>();
+    final patientController = Get.find<PatientController>();
+    
+    final dateController = TextEditingController();
+    final timeController = TextEditingController();
+    final notesController = TextEditingController();
+    DateTime? selectedDate;
+    TimeOfDay? selectedTime;
+    
+    Get.dialog(
+      Dialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20.r),
+        ),
+        child: Container(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(context).size.height * 0.8,
+          ),
+          padding: EdgeInsets.all(24.w),
+          child: StatefulBuilder(
+            builder: (context, setState) {
+              
+              return SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      'حجز موعد جديد',
+                      style: TextStyle(
+                        fontSize: 20.sp,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                    SizedBox(height: 24.h),
+                    GestureDetector(
+                      onTap: () async {
+                        final date = await showDatePicker(
+                          context: context,
+                          initialDate: DateTime.now(),
+                          firstDate: DateTime.now(),
+                          lastDate: DateTime.now().add(const Duration(days: 365)),
+                        );
+                        if (date != null) {
+                          setState(() {
+                            selectedDate = date;
+                            dateController.text = '${date.day}/${date.month}/${date.year}';
+                          });
+                        }
+                      },
+                      child: AbsorbPointer(
+                        child: TextField(
+                          controller: dateController,
+                          decoration: InputDecoration(
+                            labelText: 'التاريخ',
+                            hintText: 'اختر التاريخ',
+                            suffixIcon: Icon(Icons.calendar_today),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12.r),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    SizedBox(height: 16.h),
+                    GestureDetector(
+                      onTap: () async {
+                        final time = await showTimePicker(
+                          context: context,
+                          initialTime: TimeOfDay.now(),
+                        );
+                        if (time != null) {
+                          setState(() {
+                            selectedTime = time;
+                            timeController.text = '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
+                          });
+                        }
+                      },
+                      child: AbsorbPointer(
+                        child: TextField(
+                          controller: timeController,
+                          decoration: InputDecoration(
+                            labelText: 'الوقت',
+                            hintText: 'اختر الوقت',
+                            suffixIcon: Icon(Icons.access_time),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12.r),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    SizedBox(height: 16.h),
+                    TextField(
+                      controller: notesController,
+                      maxLines: 3,
+                      decoration: InputDecoration(
+                        labelText: 'ملاحظات (اختياري)',
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12.r),
+                        ),
+                      ),
+                    ),
+                    SizedBox(height: 24.h),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        TextButton(
+                          onPressed: () => Get.back(),
+                          child: Text('إلغاء'),
+                        ),
+                        SizedBox(width: 12.w),
+                        ElevatedButton(
+                          onPressed: () async {
+                            if (selectedDate == null || selectedTime == null) {
+                              print('خطأ: يرجى اختيار التاريخ والوقت');
+                              return;
+                            }
+                            
+                            try {
+                              // التأكد من تحميل بيانات المريض
+                              if (patientController.myProfile.value == null) {
+                                await patientController.loadMyProfile();
+                              }
+                              
+                              final profile = patientController.myProfile.value;
+                              final clinic = clinicController.selectedClinic.value;
+                              
+                              if (profile == null) {
+                                print('خطأ: لم يتم تحميل بيانات المريض');
+                                return;
+                              }
+                              
+                              // البحث عن الطبيب المرتبط بالعيادة
+                              String? doctorId;
+                              String? doctorName;
+                              
+                              if (clinic != null) {
+                                try {
+                                  final firebaseService = FirebaseService();
+                                  final doctors = await firebaseService.getAllDoctors();
+                                  
+                                  UserModel? foundDoctor;
+                                  for (var doctor in doctors) {
+                                    if (doctor.clinicId == clinic.id && doctor.doctorId != null) {
+                                      foundDoctor = doctor;
+                                      break;
+                                    }
+                                  }
+                                  
+                                  if (foundDoctor != null && foundDoctor.doctorId != null) {
+                                    doctorId = foundDoctor.doctorId;
+                                    doctorName = foundDoctor.name;
+                                  } else if (clinic.doctorName != null) {
+                                    for (var doctor in doctors) {
+                                      if (doctor.name == clinic.doctorName && doctor.doctorId != null) {
+                                        doctorId = doctor.doctorId;
+                                        doctorName = doctor.name;
+                                        break;
+                                      }
+                                    }
+                                  }
+                                } catch (e) {
+                                  print('خطأ في جلب الأطباء: $e');
+                                }
+                              }
+                              
+                              if (doctorId == null || doctorName == null) {
+                                print('خطأ: لم يتم العثور على طبيب مرتبط بهذه العيادة');
+                                return;
+                              }
+                              
+                              final scheduledAt = DateTime(
+                                selectedDate!.year,
+                                selectedDate!.month,
+                                selectedDate!.day,
+                                selectedTime!.hour,
+                                selectedTime!.minute,
+                              );
+                              
+                              await appointmentController.bookAppointment(
+                                doctorId: doctorId,
+                                doctorName: doctorName,
+                                scheduledAt: scheduledAt,
+                                note: notesController.text.isEmpty ? null : notesController.text,
+                              );
+                              
+                              Get.back();
+                              await appointmentController.loadPatientAppointments();
+                            } catch (e) {
+                              print('خطأ في حجز الموعد: $e');
+                            }
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.primary,
+                          ),
+                          child: Text('حجز'),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final authController = Get.find<AuthController>();
@@ -182,7 +395,7 @@ class PatientHomeScreen extends StatelessWidget {
                           final clinic = clinicController.selectedClinic.value;
                           
                           if (profile == null) {
-                            Get.snackbar('خطأ', 'لم يتم تحميل بيانات المريض. يرجى المحاولة مرة أخرى');
+                            print('خطأ: لم يتم تحميل بيانات المريض. يرجى المحاولة مرة أخرى');
                             return;
                           }
                           
@@ -250,7 +463,7 @@ class PatientHomeScreen extends StatelessWidget {
                           }
                           
                           if (doctorId == null || doctorId.isEmpty) {
-                            Get.snackbar('خطأ', 'لم يتم العثور على طبيب مرتبط بهذه العيادة');
+                            print('خطأ: لم يتم العثور على طبيب مرتبط بهذه العيادة');
                             return;
                           }
                           
@@ -258,7 +471,6 @@ class PatientHomeScreen extends StatelessWidget {
                           Get.toNamed(AppRoutes.chat, arguments: {'doctorId': doctorId});
                         } catch (e) {
                           print('خطأ كامل في فتح المحادثة: $e');
-                          Get.snackbar('خطأ', 'فشل فتح المحادثة: ${e.toString()}');
                         }
                       },
                       child: Container(
@@ -274,6 +486,22 @@ class PatientHomeScreen extends StatelessWidget {
                         ),
                         child: Icon(
                           Icons.chat_bubble_outline,
+                          color: AppColors.white,
+                          size: 24.sp,
+                        ),
+                      ),
+                    ),
+                    SizedBox(width: 12.w),
+                    GestureDetector(
+                      onTap: () => _showBookAppointmentDialog(context),
+                      child: Container(
+                        padding: EdgeInsets.all(12.w),
+                        decoration: BoxDecoration(
+                          color: AppColors.secondary,
+                          borderRadius: BorderRadius.circular(12.r),
+                        ),
+                        child: Icon(
+                          Icons.calendar_today,
                           color: AppColors.white,
                           size: 24.sp,
                         ),

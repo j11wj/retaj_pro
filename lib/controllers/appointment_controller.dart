@@ -28,7 +28,7 @@ class AppointmentController extends GetxController {
       final appointmentsList = await _firebaseService.getPatientAppointments(currentUser.id);
       appointments.value = appointmentsList;
     } catch (e) {
-      Get.snackbar('خطأ', 'حدث خطأ أثناء تحميل المواعيد: ${e.toString()}');
+      print('خطأ: حدث خطأ أثناء تحميل المواعيد: ${e.toString()}');
     } finally {
       isLoading.value = false;
     }
@@ -71,7 +71,7 @@ class AppointmentController extends GetxController {
       
       appointments.value = filteredAppointments;
     } catch (e) {
-      Get.snackbar('خطأ', 'حدث خطأ أثناء تحميل المواعيد: ${e.toString()}');
+      print('خطأ: حدث خطأ أثناء تحميل المواعيد: ${e.toString()}');
     } finally {
       isLoading.value = false;
     }
@@ -115,9 +115,9 @@ class AppointmentController extends GetxController {
       
       await _firebaseService.createAppointment(appointment);
       appointments.add(appointment);
-      Get.snackbar('نجح', 'تم إضافة الموعد بنجاح');
+      print('نجح: تم إضافة الموعد بنجاح');
     } catch (e) {
-      Get.snackbar('خطأ', 'حدث خطأ أثناء إضافة الموعد: ${e.toString()}');
+      print('خطأ: حدث خطأ أثناء إضافة الموعد: ${e.toString()}');
     } finally {
       isLoading.value = false;
     }
@@ -130,6 +130,52 @@ class AppointmentController extends GetxController {
              (appointment.status == 'pending' || appointment.status == 'scheduled');
     }).toList()
       ..sort((a, b) => a.date.compareTo(b.date));
+  }
+
+  // حجز موعد جديد (للمريض)
+  Future<void> bookAppointment({
+    required String doctorId,
+    required String doctorName,
+    required DateTime scheduledAt,
+    String? note,
+  }) async {
+    try {
+      isLoading.value = true;
+      
+      final authController = Get.find<AuthController>();
+      final patientController = Get.find<PatientController>();
+      final currentUser = authController.currentUser.value;
+      final profile = patientController.myProfile.value;
+      
+      if (currentUser == null || currentUser.userType != 'patient') {
+        throw Exception('المريض غير مسجل دخول');
+      }
+      
+      if (profile == null) {
+        throw Exception('بيانات المريض غير موجودة');
+      }
+      
+      final appointment = AppointmentModel(
+        id: '',
+        patientId: currentUser.id,
+        patientName: profile.name,
+        doctorId: doctorId,
+        doctorName: doctorName,
+        date: scheduledAt,
+        time: '${scheduledAt.hour.toString().padLeft(2, '0')}:${scheduledAt.minute.toString().padLeft(2, '0')}',
+        status: 'pending',
+        notes: note,
+      );
+      
+      await _firebaseService.createAppointment(appointment);
+      appointments.add(appointment);
+      print('نجح: تم حجز الموعد بنجاح');
+    } catch (e) {
+      print('خطأ: حدث خطأ أثناء حجز الموعد: ${e.toString()}');
+      rethrow;
+    } finally {
+      isLoading.value = false;
+    }
   }
 
   List<AppointmentModel> getPastAppointments() {
