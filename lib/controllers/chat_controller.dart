@@ -58,6 +58,14 @@ class ChatController extends GetxController {
   }) async {
     try {
       isLoading.value = true;
+      
+      // إلغاء الاشتراك السابق إذا كان هناك محادثة سابقة
+      if (this.otherUserId != null && this.otherUserId != otherUserId) {
+        print('إلغاء الاشتراك السابق مع: ${this.otherUserId}'); // للتشخيص
+        _chatService.unsubscribe();
+        messages.clear();
+      }
+      
       this.otherUserId = otherUserId;
       
       final userId = _getCurrentUserId();
@@ -80,7 +88,6 @@ class ChatController extends GetxController {
       print('تم تحميل ${messagesList.length} رسالة'); // للتشخيص
     } catch (e) {
       print('خطأ في loadMessages: $e'); // للتشخيص
-      Get.snackbar('خطأ', 'حدث خطأ أثناء تحميل الرسائل: ${e.toString()}');
     } finally {
       isLoading.value = false;
     }
@@ -89,29 +96,50 @@ class ChatController extends GetxController {
   // الاشتراك في الرسائل (للوقت الفعلي)
   Future<void> subscribeToMessages(String otherUserId) async {
     try {
-      this.otherUserId = otherUserId;
+      // التأكد من أن otherUserId يطابق القيمة الحالية
+      if (this.otherUserId != otherUserId) {
+        print('تحذير: otherUserId غير متطابق. الحالي: ${this.otherUserId}, الجديد: $otherUserId'); // للتشخيص
+        this.otherUserId = otherUserId;
+      }
       
       final userId = _getCurrentUserId();
       if (userId == null) {
         throw Exception('المستخدم غير مسجل دخول');
       }
       
-      currentUserId = userId;
+      // التأكد من أن currentUserId محدث
+      if (currentUserId != userId) {
+        print('تحديث currentUserId من $currentUserId إلى $userId'); // للتشخيص
+        currentUserId = userId;
+      }
       
       print('الاشتراك في الرسائل: currentUserId=$currentUserId, otherUserId=$otherUserId'); // للتشخيص
+      
+      // إلغاء الاشتراك السابق قبل الاشتراك الجديد
+      _chatService.unsubscribe();
       
       _chatService.subscribeToMessages(
         userId1: currentUserId!,
         userId2: otherUserId,
         onMessages: (newMessages) {
           print('تم استلام ${newMessages.length} رسالة جديدة'); // للتشخيص
-          messages.value = newMessages;
+          // التأكد من أن الرسائل تخص المحادثة الحالية
+          final filteredMessages = newMessages.where((msg) {
+            final isFromCurrentUser = msg.senderId == currentUserId && msg.receiverId == otherUserId;
+            final isToCurrentUser = msg.senderId == otherUserId && msg.receiverId == currentUserId;
+            return isFromCurrentUser || isToCurrentUser;
+          }).toList();
+          
+          if (filteredMessages.length != newMessages.length) {
+            print('تحذير: تم تصفية ${newMessages.length - filteredMessages.length} رسالة لا تخص هذه المحادثة'); // للتشخيص
+          }
+          
+          messages.value = filteredMessages;
           messages.sort((a, b) => a.timestamp.compareTo(b.timestamp));
         },
         onError: (error) {
           print('خطأ في الاشتراك: $error'); // للتشخيص
           isConnected.value = false;
-          Get.snackbar('خطأ', 'انقطع الاتصال');
         },
       );
       
@@ -123,8 +151,8 @@ class ChatController extends GetxController {
         userId2: otherUserId,
       );
     } catch (e) {
+      print('خطأ في subscribeToMessages: $e'); // للتشخيص
       isConnected.value = false;
-      Get.snackbar('خطأ', 'فشل الاتصال: ${e.toString()}');
     }
   }
 
@@ -142,8 +170,9 @@ class ChatController extends GetxController {
       );
       
       // الرسالة ستظهر تلقائياً من خلال الاشتراك
+      print('تم إرسال الرسالة بنجاح'); // للتشخيص
     } catch (e) {
-      Get.snackbar('خطأ', 'حدث خطأ أثناء إرسال الرسالة: ${e.toString()}');
+      print('خطأ في sendMessage: $e'); // للتشخيص
     }
   }
 

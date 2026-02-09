@@ -30,10 +30,17 @@ class _ChatScreenState extends State<ChatScreen> {
     super.initState();
     // Get otherUserId from arguments (patientId or doctorId)
     final args = Get.arguments as Map<String, dynamic>?;
-    otherUserId = args?['patientId'] ?? args?['doctorId'];
+    final newOtherUserId = args?['patientId'] ?? args?['doctorId'];
     
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      if (otherUserId != null && otherUserId!.isNotEmpty) {
+      if (newOtherUserId != null && newOtherUserId.isNotEmpty) {
+        // التأكد من إلغاء الاشتراك السابق قبل فتح محادثة جديدة
+        if (_chatController.otherUserId != null && _chatController.otherUserId != newOtherUserId) {
+          print('إغلاق المحادثة السابقة مع: ${_chatController.otherUserId}'); // للتشخيص
+          _chatController.disconnect();
+        }
+        
+        otherUserId = newOtherUserId;
         print('بدء تحميل المحادثة مع: $otherUserId'); // للتشخيص
         try {
           await _loadOtherUserName();
@@ -41,14 +48,14 @@ class _ChatScreenState extends State<ChatScreen> {
           await _chatController.subscribeToMessages(otherUserId!);
         } catch (e) {
           print('خطأ في تحميل المحادثة: $e'); // للتشخيص
-          Get.snackbar('خطأ', 'فشل تحميل المحادثة: ${e.toString()}');
         }
       } else {
-        Get.snackbar('خطأ', 'لم يتم تحديد المستخدم للدردشة');
+        print('خطأ: لم يتم تحديد المستخدم للدردشة');
         Get.back();
       }
     });
   }
+  
 
   Future<void> _loadOtherUserName() async {
     if (otherUserId == null || otherUserId!.isEmpty) {
@@ -69,46 +76,37 @@ class _ChatScreenState extends State<ChatScreen> {
       
       // إذا كان المستخدم الحالي مريضاً، المستخدم الآخر هو طبيب
       if (currentUser.userType == 'patient') {
-        try {
-          // محاولة جلب الطبيب باستخدام doctorId
-          final doctor = await _firebaseService.getDoctorByIdAndCode(otherUserId!.toUpperCase(), '');
-          if (doctor != null) {
-            setState(() {
-              otherUserName = doctor.name;
-            });
-            return;
-          }
-        } catch (e) {
-          print('خطأ في جلب الطبيب بالمعرف: $e');
-        }
+        print('البحث عن الطبيب بالمعرف: $otherUserId'); // للتشخيص
         
-        // محاولة جلب جميع الأطباء والبحث
+        // محاولة جلب جميع الأطباء والبحث بدقة
         try {
           final doctors = await _firebaseService.getAllDoctors();
-          if (doctors.isNotEmpty) {
-            UserModel? foundDoctor;
-            for (var doctor in doctors) {
-              if ((doctor.doctorId != null && doctor.doctorId!.toUpperCase() == otherUserId!.toUpperCase()) || 
-                  doctor.id == otherUserId) {
-                foundDoctor = doctor;
-                break;
-              }
-            }
+          print('تم جلب ${doctors.length} طبيب للبحث'); // للتشخيص
+          
+          UserModel? foundDoctor;
+          for (var doctor in doctors) {
+            print('فحص طبيب: ${doctor.name}, doctorId: ${doctor.doctorId}, id: ${doctor.id}'); // للتشخيص
             
-            if (foundDoctor != null) {
-              setState(() {
-                otherUserName = foundDoctor!.name;
-              });
-            } else if (doctors.isNotEmpty) {
-              setState(() {
-                otherUserName = doctors.first.name;
-              });
-            } else {
-              setState(() {
-                otherUserName = 'الطبيب';
-              });
+            // البحث بالمعرفات المختلفة
+            if (doctor.doctorId != null && doctor.doctorId!.toUpperCase() == otherUserId!.toUpperCase()) {
+              foundDoctor = doctor;
+              print('تم العثور على الطبيب بالـ doctorId: ${doctor.name}'); // للتشخيص
+              break;
             }
+            if (doctor.id.toUpperCase() == otherUserId!.toUpperCase()) {
+              foundDoctor = doctor;
+              print('تم العثور على الطبيب بالـ id: ${doctor.name}'); // للتشخيص
+              break;
+            }
+          }
+          
+          if (foundDoctor != null) {
+            setState(() {
+              otherUserName = foundDoctor!.name;
+            });
+            print('تم تعيين اسم الطبيب: ${foundDoctor.name}'); // للتشخيص
           } else {
+            print('لم يتم العثور على طبيب بالمعرف: $otherUserId'); // للتشخيص
             setState(() {
               otherUserName = 'الطبيب';
             });
@@ -188,7 +186,7 @@ class _ChatScreenState extends State<ChatScreen> {
                   Expanded(
                     child: Center(
                       child: Text(
-                        otherUserName ?? 'المحادثة',
+                       'المحادثة',
                         style: TextStyle(
                           fontSize: 20.sp,
                           fontWeight: FontWeight.bold,

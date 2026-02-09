@@ -578,52 +578,75 @@ class FirebaseService {
       final controller = StreamController<List<MessageModel>>();
       final allMessages = <String, MessageModel>{};
       
-      // جلب الرسائل من كلا الاتجاهين
+      // جلب الرسائل من كلا الاتجاهين (بدون orderBy لتجنب مشكلة الـ index)
       final stream1 = _firestore
           .collection(messagesCollection)
           .where('senderId', isEqualTo: userId1)
           .where('receiverId', isEqualTo: userId2)
-          .orderBy('timestamp', descending: false)
           .snapshots();
 
       final stream2 = _firestore
           .collection(messagesCollection)
           .where('senderId', isEqualTo: userId2)
           .where('receiverId', isEqualTo: userId1)
-          .orderBy('timestamp', descending: false)
           .snapshots();
 
       StreamSubscription? sub1;
       StreamSubscription? sub2;
+      bool isFirstSnapshot1 = true;
+      bool isFirstSnapshot2 = true;
       
       void updateMessages() {
         final messages = allMessages.values.toList();
         messages.sort((a, b) => a.timestamp.compareTo(b.timestamp));
         controller.add(messages);
+        print('تحديث الرسائل: ${messages.length} رسالة'); // للتشخيص
       }
       
       sub1 = stream1.listen(
         (snapshot) {
-          // معالجة التغييرات في Stream
-          for (var change in snapshot.docChanges) {
-            if (change.type == DocumentChangeType.removed) {
-              // حذف الرسالة إذا تم حذفها
-              allMessages.remove(change.doc.id);
-            } else {
-              // إضافة أو تحديث الرسالة
-              final data = change.doc.data();
-              if (data != null) {
-                data['id'] = change.doc.id;
-                if (data['timestamp'] == null) {
-                  data['timestamp'] = DateTime.now().toIso8601String();
-                } else if (data['timestamp'] is Timestamp) {
-                  data['timestamp'] = (data['timestamp'] as Timestamp).toDate().toIso8601String();
-                }
-                try {
-                  final message = MessageModel.fromJson(data);
-                  allMessages[message.id] = message;
-                } catch (e) {
-                  print('خطأ في تحويل الرسالة: $e');
+          print('stream1: ${snapshot.docChanges.length} تغيير، ${snapshot.docs.length} وثيقة'); // للتشخيص
+          
+          // في الـ snapshot الأول، نضيف جميع الرسائل
+          if (isFirstSnapshot1) {
+            isFirstSnapshot1 = false;
+            for (var doc in snapshot.docs) {
+              final data = doc.data();
+              data['id'] = doc.id;
+              if (data['timestamp'] == null) {
+                data['timestamp'] = DateTime.now().toIso8601String();
+              } else if (data['timestamp'] is Timestamp) {
+                data['timestamp'] = (data['timestamp'] as Timestamp).toDate().toIso8601String();
+              }
+              try {
+                final message = MessageModel.fromJson(data);
+                allMessages[message.id] = message;
+              } catch (e) {
+                print('خطأ في تحويل الرسالة: $e');
+              }
+            }
+          } else {
+            // في الـ snapshots التالية، نعالج فقط التغييرات
+            for (var change in snapshot.docChanges) {
+              if (change.type == DocumentChangeType.removed) {
+                allMessages.remove(change.doc.id);
+                print('تم حذف رسالة: ${change.doc.id}'); // للتشخيص
+              } else {
+                final data = change.doc.data();
+                if (data != null) {
+                  data['id'] = change.doc.id;
+                  if (data['timestamp'] == null) {
+                    data['timestamp'] = DateTime.now().toIso8601String();
+                  } else if (data['timestamp'] is Timestamp) {
+                    data['timestamp'] = (data['timestamp'] as Timestamp).toDate().toIso8601String();
+                  }
+                  try {
+                    final message = MessageModel.fromJson(data);
+                    allMessages[message.id] = message;
+                    print('تم ${change.type == DocumentChangeType.added ? 'إضافة' : 'تحديث'} رسالة: ${message.id}'); // للتشخيص
+                  } catch (e) {
+                    print('خطأ في تحويل الرسالة: $e');
+                  }
                 }
               }
             }
@@ -638,26 +661,48 @@ class FirebaseService {
       
       sub2 = stream2.listen(
         (snapshot) {
-          // معالجة التغييرات في Stream
-          for (var change in snapshot.docChanges) {
-            if (change.type == DocumentChangeType.removed) {
-              // حذف الرسالة إذا تم حذفها
-              allMessages.remove(change.doc.id);
-            } else {
-              // إضافة أو تحديث الرسالة
-              final data = change.doc.data();
-              if (data != null) {
-                data['id'] = change.doc.id;
-                if (data['timestamp'] == null) {
-                  data['timestamp'] = DateTime.now().toIso8601String();
-                } else if (data['timestamp'] is Timestamp) {
-                  data['timestamp'] = (data['timestamp'] as Timestamp).toDate().toIso8601String();
-                }
-                try {
-                  final message = MessageModel.fromJson(data);
-                  allMessages[message.id] = message;
-                } catch (e) {
-                  print('خطأ في تحويل الرسالة: $e');
+          print('stream2: ${snapshot.docChanges.length} تغيير، ${snapshot.docs.length} وثيقة'); // للتشخيص
+          
+          // في الـ snapshot الأول، نضيف جميع الرسائل
+          if (isFirstSnapshot2) {
+            isFirstSnapshot2 = false;
+            for (var doc in snapshot.docs) {
+              final data = doc.data();
+              data['id'] = doc.id;
+              if (data['timestamp'] == null) {
+                data['timestamp'] = DateTime.now().toIso8601String();
+              } else if (data['timestamp'] is Timestamp) {
+                data['timestamp'] = (data['timestamp'] as Timestamp).toDate().toIso8601String();
+              }
+              try {
+                final message = MessageModel.fromJson(data);
+                allMessages[message.id] = message;
+              } catch (e) {
+                print('خطأ في تحويل الرسالة: $e');
+              }
+            }
+          } else {
+            // في الـ snapshots التالية، نعالج فقط التغييرات
+            for (var change in snapshot.docChanges) {
+              if (change.type == DocumentChangeType.removed) {
+                allMessages.remove(change.doc.id);
+                print('تم حذف رسالة: ${change.doc.id}'); // للتشخيص
+              } else {
+                final data = change.doc.data();
+                if (data != null) {
+                  data['id'] = change.doc.id;
+                  if (data['timestamp'] == null) {
+                    data['timestamp'] = DateTime.now().toIso8601String();
+                  } else if (data['timestamp'] is Timestamp) {
+                    data['timestamp'] = (data['timestamp'] as Timestamp).toDate().toIso8601String();
+                  }
+                  try {
+                    final message = MessageModel.fromJson(data);
+                    allMessages[message.id] = message;
+                    print('تم ${change.type == DocumentChangeType.added ? 'إضافة' : 'تحديث'} رسالة: ${message.id}'); // للتشخيص
+                  } catch (e) {
+                    print('خطأ في تحويل الرسالة: $e');
+                  }
                 }
               }
             }
@@ -690,13 +735,11 @@ class FirebaseService {
     try {
       print('جلب الرسائل: userId1=$userId1, userId2=$userId2'); // للتشخيص
       
-      // جلب الرسائل من كلا الاتجاهين
+      // جلب الرسائل من كلا الاتجاهين (بدون orderBy لتجنب مشكلة الـ index)
       final query1 = await _firestore
           .collection(messagesCollection)
           .where('senderId', isEqualTo: userId1)
           .where('receiverId', isEqualTo: userId2)
-          .orderBy('timestamp', descending: false)
-          .limit(limit)
           .get();
       
       print('الرسائل المرسلة من $userId1 إلى $userId2: ${query1.docs.length}'); // للتشخيص
@@ -705,8 +748,6 @@ class FirebaseService {
           .collection(messagesCollection)
           .where('senderId', isEqualTo: userId2)
           .where('receiverId', isEqualTo: userId1)
-          .orderBy('timestamp', descending: false)
-          .limit(limit)
           .get();
       
       print('الرسائل المرسلة من $userId2 إلى $userId1: ${query2.docs.length}'); // للتشخيص
@@ -837,6 +878,16 @@ class FirebaseService {
           doctorId: 'DOC005',
           doctorCode: '7890',
           clinicId: clinics.length > 4 ? clinics[4].id : clinics.isNotEmpty ? clinics[0].id : 'clinic_5',
+        ),
+        // إضافة المزيد من الأطباء للعيادات الأخرى
+        UserModel(
+          id: '',
+          name: 'د. ريم عبدالله',
+          phoneNumber: '07901234576',
+          userType: 'doctor',
+          doctorId: 'DOC010',
+          doctorCode: '1010',
+          clinicId: clinics.length > 9 ? clinics[9].id : (clinics.any((c) => c.id == 'clinic_10') ? 'clinic_10' : (clinics.isNotEmpty ? clinics[0].id : 'clinic_10')),
         ),
       ];
 

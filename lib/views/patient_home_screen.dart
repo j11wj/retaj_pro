@@ -414,19 +414,34 @@ class PatientHomeScreen extends StatelessWidget {
                               
                               // البحث عن الطبيب المرتبط بالعيادة
                               UserModel? foundDoctor;
+                              
+                              // أولاً: البحث باستخدام clinicId
                               for (var doctor in doctors) {
                                 print('فحص طبيب: ${doctor.name}, clinicId: ${doctor.clinicId}, doctorId: ${doctor.doctorId}'); // للتشخيص
                                 if (doctor.clinicId == clinic.id && doctor.doctorId != null) {
                                   foundDoctor = doctor;
+                                  print('تم العثور على الطبيب بالـ clinicId: ${doctor.name}'); // للتشخيص
                                   break;
+                                }
+                              }
+                              
+                              // ثانياً: إذا لم نجد، نبحث بالاسم من العيادة
+                              if (foundDoctor == null && clinic.doctorName != null) {
+                                print('البحث عن الطبيب بالاسم من العيادة: ${clinic.doctorName}'); // للتشخيص
+                                for (var doctor in doctors) {
+                                  if (doctor.name == clinic.doctorName && doctor.doctorId != null) {
+                                    foundDoctor = doctor;
+                                    print('تم العثور على الطبيب بالاسم: ${doctor.name}'); // للتشخيص
+                                    break;
+                                  }
                                 }
                               }
                               
                               if (foundDoctor != null && foundDoctor.doctorId != null) {
                                 doctorId = foundDoctor.doctorId;
-                                print('تم العثور على الطبيب من العيادة: $doctorId'); // للتشخيص
+                                print('تم العثور على الطبيب من العيادة: $doctorId (${foundDoctor.name})'); // للتشخيص
                               } else {
-                                print('لم يتم العثور على طبيب مرتبط بالعيادة'); // للتشخيص
+                                print('لم يتم العثور على طبيب مرتبط بالعيادة: ${clinic.name}'); // للتشخيص
                               }
                             } catch (e) {
                               print('خطأ في جلب الأطباء: $e'); // للتشخيص
@@ -552,11 +567,15 @@ class PatientHomeScreen extends StatelessWidget {
                                     color: AppColors.primary,
                                   ),
                                   SizedBox(width: 4.w),
-                                  Text(
-                                    clinic!.location!,
-                                    style: TextStyle(
-                                      fontSize: 12.sp,
-                                      color: AppColors.textHint,
+                                  Flexible(
+                                    child: Text(
+                                      clinic!.location!,
+                                      style: TextStyle(
+                                        fontSize: 12.sp,
+                                        color: AppColors.textHint,
+                                      ),
+                                      overflow: TextOverflow.ellipsis,
+                                      maxLines: 1,
                                     ),
                                   ),
                                 ],
