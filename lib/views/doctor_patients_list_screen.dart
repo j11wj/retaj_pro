@@ -20,7 +20,7 @@ class _DoctorPatientsListScreenState extends State<DoctorPatientsListScreen> {
   final PatientController _patientController = Get.find<PatientController>();
   final TextEditingController _searchController = TextEditingController();
   final RxBool _isSearching = false.obs;
-  List<dynamic> _filteredPatients = [];
+  final RxList<PatientModel> _filteredPatients = <PatientModel>[].obs;
 
   @override
   void initState() {
@@ -39,12 +39,13 @@ class _DoctorPatientsListScreenState extends State<DoctorPatientsListScreen> {
   }
 
   void _onSearchChanged() {
-    final query = _searchController.text;
+    final query = _searchController.text.trim();
     if (query.isEmpty) {
-      _filteredPatients = [];
+      _filteredPatients.clear();
       _isSearching.value = false;
     } else {
-      _filteredPatients = _patientController.searchPatients(query);
+      final results = _patientController.searchPatients(query);
+      _filteredPatients.value = results;
       _isSearching.value = true;
     }
   }
@@ -96,24 +97,29 @@ class _DoctorPatientsListScreenState extends State<DoctorPatientsListScreen> {
               ),
             ),
             Obx(() {
-              if (_isSearching.value && _searchController.text.isNotEmpty) {
+              if (_isSearching.value) {
                 return Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 24.w),
+                  padding: EdgeInsets.symmetric(horizontal: 24.w, vertical: 8.h),
                   child: TextField(
                     controller: _searchController,
+                    autofocus: true,
                     decoration: InputDecoration(
-                      hintText: 'ابحث عن مريض...',
+                      hintText: 'ابحث عن مريض بالاسم أو رقم الهاتف...',
                       prefixIcon: Icon(Icons.search),
-                      suffixIcon: IconButton(
-                        icon: Icon(Icons.clear),
-                        onPressed: () {
-                          _searchController.clear();
-                          _isSearching.value = false;
-                        },
-                      ),
+                      suffixIcon: _searchController.text.isNotEmpty
+                          ? IconButton(
+                              icon: Icon(Icons.clear),
+                              onPressed: () {
+                                _searchController.clear();
+                                _isSearching.value = false;
+                              },
+                            )
+                          : null,
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12.r),
                       ),
+                      filled: true,
+                      fillColor: AppColors.background,
                     ),
                   ),
                 );
@@ -127,7 +133,7 @@ class _DoctorPatientsListScreenState extends State<DoctorPatientsListScreen> {
                   return const LoadingWidget(message: 'جاري تحميل المرضى...');
                 }
 
-                final patientsToShow = _isSearching.value && _searchController.text.isNotEmpty
+                final patientsToShow = _isSearching.value && _searchController.text.trim().isNotEmpty
                     ? _filteredPatients
                     : _patientController.patients;
 
@@ -143,7 +149,7 @@ class _DoctorPatientsListScreenState extends State<DoctorPatientsListScreen> {
                   padding: EdgeInsets.symmetric(horizontal: 24.w),
                   itemCount: patientsToShow.length,
                   itemBuilder: (context, index) {
-                    final patient = patientsToShow[index] as PatientModel;
+                    final patient = patientsToShow[index];
                     return GestureDetector(
                       onTap: () {
                         _patientController.selectPatient(patient);

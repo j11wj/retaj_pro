@@ -154,3 +154,4 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
 }
 
 
+
